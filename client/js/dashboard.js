@@ -19,7 +19,12 @@ function showDashboard() {
   document.getElementById('stepsBar').style.display = 'none';
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
 
-  showScreen('mainApp');
+  // Show mainApp, hide other screens
+  ['loadingScreen', 'loginScreen', 'adminScreen'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('mainApp').style.display       = 'block';
   document.getElementById('dashboardScreen').style.display = 'block';
 
   // Populate greeting

@@ -104,6 +104,18 @@ const API = {
   async deleteDoctor(id) {
     return this._fetch(`/admin/doctors/${id}`, { method: 'DELETE' });
   },
+
+  // ── Admin auth (separate endpoint — no doctors row required) ─────
+  async adminLogin(email, password) {
+    const data = await this._fetch('/auth/admin-login', {
+      method: 'POST',
+      body:   { email, password },
+    });
+    // Store admin token in sessionStorage
+    sessionStorage.setItem('ib_token',   data.session.access_token);
+    sessionStorage.setItem('ib_isAdmin', 'true');
+    return data;
+  },
 };
 
 window.API = API;

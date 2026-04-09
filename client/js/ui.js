@@ -52,10 +52,10 @@ function updateSidebarForDoctor(drName) {
 function sidebarGoTo(dest) {
   closeSidebar();
   if (dest === 'dashboard') {
-    setSidebarActive('sidebarDashboard');
+    setSidebarActive('sidebar-nav-dashboard');
     showDashboard();
   } else if (dest === 'billing') {
-    setSidebarActive('sidebarBilling');
+    setSidebarActive('sidebar-nav-billing');
     newBilling();
   }
 }
@@ -97,3 +97,15 @@ function openTariffRef() {
 function closeTariffRef() {
   document.getElementById('tariffModal').style.display = 'none';
 }
+
+/* ── Generic tariff reference sheet ─────────────────────────── */
+function openGenericSheet() {
+  closeSidebar();
+  openTariffRef();
+}
+
+/* ── Global JS error handler (dev helper) ───────────────────── */
+window.onerror = function(msg, src, line, col, err) {
+  console.error('JS Error:', msg, 'at', src, line + ':' + col, err);
+  return false;
+};

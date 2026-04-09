@@ -2,21 +2,24 @@
  * auth.js — Login, logout, admin auth
  */
 
-/* ── Screen visibility helpers ─────────────────────────────── */
+/* ── Screen visibility ──────────────────────────────────────── */
 function showScreen(id) {
   ['loadingScreen', 'loginScreen', 'mainApp', 'adminScreen'].forEach(s => {
     const el = document.getElementById(s);
     if (el) el.style.display = 'none';
   });
   const target = document.getElementById(id);
-  if (target) target.style.display = id === 'loginScreen' ? 'flex' : 'block';
+  if (target) target.style.display = (id === 'loginScreen') ? 'flex' : 'block';
 }
 
 function showLogin() {
   showScreen('loginScreen');
-  document.getElementById('loginError').style.display = 'none';
-  document.getElementById('loginEmail').value    = '';
-  document.getElementById('loginPassword').value = '';
+  const errEl = document.getElementById('loginError');
+  if (errEl) errEl.style.display = 'none';
+  const emailEl = document.getElementById('loginEmail');
+  const passEl  = document.getElementById('loginPassword');
+  if (emailEl) emailEl.value = '';
+  if (passEl)  passEl.value  = '';
 }
 
 /* ── Doctor login ───────────────────────────────────────────── */
@@ -27,7 +30,7 @@ async function login() {
   const errEl    = document.getElementById('loginError');
 
   if (!email || !password) {
-    errEl.textContent = 'Please enter your email and password.';
+    errEl.textContent   = 'Please enter your email and password.';
     errEl.style.display = 'block';
     return;
   }
@@ -42,7 +45,7 @@ async function login() {
     setTodayDate();
     await loadPatientsAndStart();
   } catch (err) {
-    errEl.textContent = err.message;
+    errEl.textContent   = err.message;
     errEl.style.display = 'block';
   } finally {
     btn.disabled    = false;
@@ -51,32 +54,41 @@ async function login() {
 }
 
 async function logout() {
-  await API.logout();
+  await API.logout().catch(() => {});
   window.doctorProfile = null;
   window.allPatients   = [];
-  resetBillingState();
+  sessionStorage.clear();
   showLogin();
 }
 
-/* ── Page init ───────────────────────────────────────────────── */
+/* ── Page init — always force login on every visit ──────────── */
 window.onload = async () => {
   setTodayDate();
-  // Always force login — no session persistence between visits
+  // Destroy any cached session — medical app must always require fresh login
+  sessionStorage.clear();
   await API.logout().catch(() => {});
   showLogin();
 };
 
 /* ── Admin login overlay ─────────────────────────────────────── */
 function showAdminLogin() {
-  document.getElementById('adminLoginOverlay').style.display = 'flex';
-  setTimeout(() => document.getElementById('adminLoginEmail').focus(), 80);
+  const overlay = document.getElementById('adminLoginOverlay');
+  if (overlay) overlay.style.display = 'flex';
+  setTimeout(() => {
+    const el = document.getElementById('adminLoginEmail');
+    if (el) el.focus();
+  }, 80);
 }
 
 function hideAdminLogin() {
-  document.getElementById('adminLoginOverlay').style.display = 'none';
-  document.getElementById('adminLoginError').style.display = 'none';
-  document.getElementById('adminLoginEmail').value    = '';
-  document.getElementById('adminLoginPassword').value = '';
+  const overlay = document.getElementById('adminLoginOverlay');
+  if (overlay) overlay.style.display = 'none';
+  const errEl = document.getElementById('adminLoginError');
+  if (errEl) errEl.style.display = 'none';
+  const emailEl = document.getElementById('adminLoginEmail');
+  const passEl  = document.getElementById('adminLoginPassword');
+  if (emailEl) emailEl.value = '';
+  if (passEl)  passEl.value  = '';
 }
 
 async function adminLogin() {
@@ -86,7 +98,7 @@ async function adminLogin() {
   const errEl    = document.getElementById('adminLoginError');
 
   if (!email || !password) {
-    errEl.textContent = 'Please enter both fields.';
+    errEl.textContent   = 'Please enter both fields.';
     errEl.style.display = 'block';
     return;
   }
@@ -96,16 +108,14 @@ async function adminLogin() {
   errEl.style.display = 'none';
 
   try {
-    // Login through the same endpoint — server enforces ADMIN_EMAIL check via the admin routes
-    await API.login(email, password);
+    // Use the separate admin-login endpoint — no doctors row needed
+    await API.adminLogin(email, password);
     hideAdminLogin();
     showScreen('adminScreen');
     clearAdminForm();
     await loadAdminDoctors();
   } catch (err) {
-    errEl.textContent = err.message.includes('No doctor profile')
-      ? 'Access denied — not an admin account.'
-      : err.message;
+    errEl.textContent   = err.message;
     errEl.style.display = 'block';
   } finally {
     btn.disabled    = false;
@@ -114,6 +124,7 @@ async function adminLogin() {
 }
 
 async function exitAdmin() {
-  await API.logout();
+  await API.logout().catch(() => {});
+  sessionStorage.clear();
   showLogin();
 }

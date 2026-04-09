@@ -1,8 +1,5 @@
 /**
  * /api/auth
- * Proxies Supabase auth so the frontend never holds the service role key.
- * The anon key IS safe in the browser (it's public), but we centralise
- * auth here so we can add audit logging, MFA checks, etc. in future.
  */
 
 const express = require('express');
@@ -11,13 +8,11 @@ const { requireAuth } = require('../middleware/requireAuth');
 
 const router = express.Router();
 
-// Public Supabase client (anon key) — used for sign-in only
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
 
-// Admin Supabase client (service role) — used for fetching doctor config
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -25,8 +20,7 @@ const supabaseAdmin = createClient(
 
 /**
  * POST /api/auth/login
- * Body: { email, password }
- * Returns: { session: { access_token, ... }, doctor: { doctor_name, ... } }
+ * For doctors — requires a row in the doctors table.
  */
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -38,7 +32,7 @@ router.post('/login', async (req, res) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return res.status(401).json({ error: error.message });
 
-    // Load doctor config (server-side — keys NEVER leave this function)
+    // Load doctor config server-side
     const { data: doctor, error: drErr } = await supabaseAdmin
       .from('doctors')
       .select('id, doctor_name, email, intake_sheet_id, intake_tab_name, apps_script_url, collections_sheet_id')
@@ -46,10 +40,11 @@ router.post('/login', async (req, res) => {
       .single();
 
     if (drErr || !doctor) {
-      return res.status(403).json({ error: 'No doctor profile found for this account. Contact your administrator.' });
+      // Sign them out — no doctor profile means they shouldn't be in the app
+      await supabaseAdmin.auth.admin.signOut(data.session.access_token).catch(() => {});
+      return res.status(403).json({ error: 'No doctor profile found for this account.' });
     }
 
-    // Return session token + safe doctor info (no API keys)
     res.json({
       session: {
         access_token:  data.session.access_token,
@@ -57,13 +52,11 @@ router.post('/login', async (req, res) => {
         expires_at:    data.session.expires_at,
       },
       doctor: {
-        id:                  doctor.id,
-        doctor_name:         doctor.doctor_name,
-        email:               doctor.email,
-        has_sheet:           !!(doctor.intake_sheet_id && doctor.apps_script_url),
+        id:                   doctor.id,
+        doctor_name:          doctor.doctor_name,
+        email:                doctor.email,
+        has_sheet:            !!(doctor.intake_sheet_id && doctor.apps_script_url),
         collections_sheet_id: doctor.collections_sheet_id || null,
-        // Note: intake_sheet_id, apps_script_url, google_key, anthropic_key
-        // are NEVER sent to the browser. The server uses them directly.
       }
     });
   } catch (err) {
@@ -73,23 +66,51 @@ router.post('/login', async (req, res) => {
 });
 
 /**
- * POST /api/auth/logout
- * Invalidates the session server-side.
+ * POST /api/auth/admin-login
+ * For the admin account — does NOT require a doctors row.
+ * Only the ADMIN_EMAIL address is allowed through.
  */
-router.post('/logout', requireAuth, async (req, res) => {
+router.post('/admin-login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  // Block anything that isn't the configured admin email
+  if (email.toLowerCase().trim() !== (process.env.ADMIN_EMAIL || '').toLowerCase().trim()) {
+    return res.status(403).json({ error: 'Access denied — not an admin account.' });
+  }
+
   try {
-    // Sign out using the admin client to ensure server-side revocation
-    await supabaseAdmin.auth.admin.signOut(req.user.id);
-    res.json({ ok: true });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return res.status(401).json({ error: error.message });
+
+    res.json({
+      session: {
+        access_token:  data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_at:    data.session.expires_at,
+      },
+      isAdmin: true,
+    });
   } catch (err) {
-    // Even if this fails, the client should clear its token
-    res.json({ ok: true });
+    console.error('Admin login error:', err.message);
+    res.status(500).json({ error: 'Login failed.' });
   }
 });
 
 /**
+ * POST /api/auth/logout
+ */
+router.post('/logout', requireAuth, async (req, res) => {
+  try {
+    await supabaseAdmin.auth.admin.signOut(req.user.id);
+  } catch (_) {}
+  res.json({ ok: true });
+});
+
+/**
  * GET /api/auth/me
- * Returns the currently logged-in doctor's safe profile.
  */
 router.get('/me', requireAuth, async (req, res) => {
   try {
@@ -98,8 +119,7 @@ router.get('/me', requireAuth, async (req, res) => {
       .select('id, doctor_name, email, collections_sheet_id')
       .eq('email', req.user.email)
       .single();
-
-    res.json({ doctor });
+    res.json({ doctor: doctor || null });
   } catch (err) {
     res.status(500).json({ error: 'Could not load profile.' });
   }
