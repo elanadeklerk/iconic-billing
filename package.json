@@ -1,7 +1,7 @@
 {
   "name": "iconic-billing",
   "version": "1.0.0",
-  "description": "Iconic Billing Portal — Medical Billing System",
+  "description": "Iconic Billing Portal \u2014 Medical Billing System",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
@@ -13,11 +13,12 @@
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
-    "helmet": "^7.1.0",
-    "node-fetch": "^3.3.2"
+    "helmet": "^7.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   },
-  "engines": { "node": ">=18.0.0" }
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

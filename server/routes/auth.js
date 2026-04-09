@@ -19,30 +19,30 @@ const supabaseAdmin = createClient(
 );
 
 /**
- * POST /api/auth/login
- * For doctors — requires a row in the doctors table.
+ * POST /api/auth/login  — doctors only
  */
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
   try {
+    // 1. Authenticate with Supabase
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return res.status(401).json({ error: error.message });
 
-    // Load doctor config server-side
+    // 2. Verify a doctor profile exists
     const { data: doctor, error: drErr } = await supabaseAdmin
       .from('doctors')
       .select('id, doctor_name, email, intake_sheet_id, intake_tab_name, apps_script_url, collections_sheet_id')
-      .eq('email', email)
+      .eq('email', email.toLowerCase().trim())
       .single();
 
     if (drErr || !doctor) {
-      // Sign them out — no doctor profile means they shouldn't be in the app
-      await supabaseAdmin.auth.admin.signOut(data.session.access_token).catch(() => {});
-      return res.status(403).json({ error: 'No doctor profile found for this account.' });
+      // Sign them back out — no profile, no access
+      try { await supabaseAdmin.auth.admin.signOut(data.user.id); } catch (_) {}
+      return res.status(403).json({ error: 'No doctor profile found for this account. Contact your administrator.' });
     }
 
     res.json({
@@ -60,24 +60,25 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Login error:', err.message);
+    console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed. Please try again.' });
   }
 });
 
 /**
- * POST /api/auth/admin-login
- * For the admin account — does NOT require a doctors row.
- * Only the ADMIN_EMAIL address is allowed through.
+ * POST /api/auth/admin-login  — admin only, no doctors row needed
  */
 router.post('/admin-login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
-  // Block anything that isn't the configured admin email
-  if (email.toLowerCase().trim() !== (process.env.ADMIN_EMAIL || '').toLowerCase().trim()) {
+  const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  if (!adminEmail) {
+    return res.status(503).json({ error: 'Admin email not configured on server.' });
+  }
+  if (email.toLowerCase().trim() !== adminEmail) {
     return res.status(403).json({ error: 'Access denied — not an admin account.' });
   }
 
@@ -94,7 +95,7 @@ router.post('/admin-login', async (req, res) => {
       isAdmin: true,
     });
   } catch (err) {
-    console.error('Admin login error:', err.message);
+    console.error('Admin login error:', err);
     res.status(500).json({ error: 'Login failed.' });
   }
 });
@@ -105,7 +106,9 @@ router.post('/admin-login', async (req, res) => {
 router.post('/logout', requireAuth, async (req, res) => {
   try {
     await supabaseAdmin.auth.admin.signOut(req.user.id);
-  } catch (_) {}
+  } catch (_) {
+    // Don't fail logout even if server-side revocation fails
+  }
   res.json({ ok: true });
 });
 

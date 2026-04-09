@@ -15,13 +15,8 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-/**
- * GET /api/patients
- * Returns the patient list for the authenticated doctor.
- */
 router.get('/', requireAuth, async (req, res) => {
   try {
-    // Fetch doctor config including the secret google_key
     const { data: doctor, error } = await supabaseAdmin
       .from('doctors')
       .select('intake_sheet_id, intake_tab_name, google_key')
@@ -35,28 +30,22 @@ router.get('/', requireAuth, async (req, res) => {
       return res.status(422).json({ error: 'Google Sheet not configured. Contact your administrator.' });
     }
 
-    const tabName   = doctor.intake_tab_name || 'Form responses 1';
-    const sheetUrl  = `https://sheets.googleapis.com/v4/spreadsheets/${doctor.intake_sheet_id}/values/${encodeURIComponent(tabName)}?key=${doctor.google_key}`;
+    const tabName  = encodeURIComponent(doctor.intake_tab_name || 'Form responses 1');
+    const sheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${doctor.intake_sheet_id}/values/${tabName}?key=${doctor.google_key}`;
 
-    // Use dynamic import for node-fetch (ESM)
-    const { default: fetch } = await import('node-fetch');
     const sheetRes = await fetch(sheetUrl);
 
     if (!sheetRes.ok) {
       const errText = await sheetRes.text();
       console.error('Sheets API error:', errText);
-      return res.status(502).json({ error: 'Could not load patient data from Google Sheets. Check the Sheet ID and API key.' });
+      return res.status(502).json({ error: 'Could not load patient data from Google Sheets.' });
     }
 
     const sheetData = await sheetRes.json();
     const rows      = sheetData.values || [];
 
-    if (rows.length < 2) {
-      return res.json({ patients: [] });
-    }
+    if (rows.length < 2) return res.json({ patients: [] });
 
-    // Parse rows — column mapping matches the existing app
-    // Skip header row (row 0)
     const patients = rows.slice(1).map(row => ({
       fileNo:  (row[1]  || '').trim(),
       name:    (row[2]  || '').trim(),
@@ -70,7 +59,7 @@ router.get('/', requireAuth, async (req, res) => {
     res.json({ patients });
   } catch (err) {
     console.error('Patients fetch error:', err.message);
-    res.status(500).json({ error: 'Failed to load patients.' });
+    res.status(500).json({ error: 'Failed to load patients: ' + err.message });
   }
 });
 
