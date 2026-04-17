@@ -400,13 +400,8 @@ router.get('/stats', requireAuth, async (req, res) => {
  */
 router.get('/status', requireAuth, async (req, res) => {
   try {
-    const { data: doctor } = await supabaseAdmin
-      .from('doctors')
-      .select('intake_sheet_id, collections_sheet_id')
-      .eq('email', req.user.email)
-      .single();
-
-    const sheetId = doctor?.collections_sheet_id || doctor?.intake_sheet_id;
+    const doctor  = await getDoctorConfig(req.user.email);
+    const sheetId = doctor.collections_sheet_id || doctor.intake_sheet_id;
     if (!sheetId) return res.json({ available: false, patients: [] });
 
     const tabName    = encodeURIComponent('Billing Log');
@@ -603,13 +598,8 @@ router.get('/revenue', requireAuth, async (req, res) => {
  */
 router.get('/collections', requireAuth, async (req, res) => {
   try {
-    const { data: doctor } = await supabaseAdmin
-      .from('doctors')
-      .select('intake_sheet_id, collections_sheet_id, doctor_name')
-      .eq('email', req.user.email)
-      .single();
-
-    const sheetId = doctor?.collections_sheet_id || doctor?.intake_sheet_id;
+    const doctor  = await getDoctorConfig(req.user.email);
+    const sheetId = doctor.collections_sheet_id || doctor.intake_sheet_id;
     if (!sheetId) return res.json({ available: false });
 
     const tabName    = encodeURIComponent('Billing Log');

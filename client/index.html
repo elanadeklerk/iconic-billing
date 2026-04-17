@@ -530,22 +530,18 @@
   </div>
 </div>
 
-<!-- ── Patient Status Screen ─────────────────────────────────── -->
+<!-- ── Patient Intake Database Screen ────────────────────────── -->
 <div class="ps-screen" id="patientStatusScreen" style="display:none;">
   <div class="ps-header">
     <button id="closePatientStatusBtn" class="ps-back-btn">←</button>
-    <div class="ps-title">Patient Status</div>
+    <div class="ps-title">Patient Intake Database</div>
     <div class="ps-refresh-btn" id="refreshPatientStatusBtn">↻</div>
   </div>
-  <div class="ps-filter-bar" id="psFilterBar">
-    <button class="ps-chip active" data-filter="all">All</button>
-    <button class="ps-chip" data-filter="unbilled">Unbilled</button>
-    <button class="ps-chip" data-filter="inprogress">In Progress</button>
-    <button class="ps-chip" data-filter="paid">Paid / Settled</button>
-    <button class="ps-chip" data-filter="rejected">Rejected</button>
+  <div class="ps-search-bar">
+    <input type="search" id="psSearchInput" class="ps-search-input" placeholder="Search by name or file number…" autocomplete="off" />
   </div>
   <div class="ps-list" id="psListContainer">
-    <div class="ps-loading" id="psLoading">Loading patient status…</div>
+    <div class="ps-loading" id="psLoading">Loading…</div>
   </div>
 </div>
 

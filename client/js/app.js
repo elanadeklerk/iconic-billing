@@ -1064,16 +1064,12 @@ const App = {
     on('closeCollectionsBtn',   'click', () => App.closeCollections());
     on('refreshCollectionsBtn', 'click', () => App.loadCollections());
 
-    // ── Patient Status screen ─────────────────────────────────
-    on('sidebarPatientStatus', 'click', () => { App.closeSidebar(); App.openPatientStatus(); });
-    on('closePatientStatusBtn', 'click', () => App.closePatientStatus());
+    // ── Patient Intake Database screen ───────────────────────
+    on('sidebarPatientStatus',    'click', () => { App.closeSidebar(); App.openPatientStatus(); });
+    on('closePatientStatusBtn',   'click', () => App.closePatientStatus());
     on('refreshPatientStatusBtn', 'click', () => App.loadPatientStatus());
-    App.el('psFilterBar')?.addEventListener('click', e => {
-      const chip = e.target.closest('.ps-chip');
-      if (!chip) return;
-      App.el('psFilterBar').querySelectorAll('.ps-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      App.renderPatientStatusList(chip.dataset.filter);
+    App.el('psSearchInput')?.addEventListener('input', e => {
+      App.renderPatientStatusList(e.target.value.trim());
     });
   },
 
@@ -1229,8 +1225,8 @@ const App = {
 
   openPatientStatus() {
     App.el('patientStatusScreen').style.display = 'flex';
-    // Reset filter to All
-    App.el('psFilterBar')?.querySelectorAll('.ps-chip').forEach((c, i) => c.classList.toggle('active', i === 0));
+    const inp = App.el('psSearchInput');
+    if (inp) inp.value = '';
     App.loadPatientStatus();
   },
 
@@ -1240,69 +1236,64 @@ const App = {
 
   async loadPatientStatus() {
     const container = App.el('psListContainer');
-    const loading   = App.el('psLoading');
-    if (loading) { loading.style.display = 'block'; loading.textContent = 'Loading patient status…'; }
-    container.querySelectorAll('.ps-card').forEach(c => c.remove());
+    container.innerHTML = '<div class="ps-loading" id="psLoading">Loading…</div>';
     try {
       const data = await API.getPatientStatus();
       App._psAllPatients = data.patients || [];
-      if (!data.available) {
-        if (loading) loading.textContent = 'Sheet not configured. Contact your administrator.';
+      if (!data.available || !App._psAllPatients.length) {
+        container.innerHTML = '<div class="ps-loading">No billing entries found. Submit a billing entry first, then run Billing → Refresh All in your sheet.</div>';
         return;
       }
-      if (loading) loading.style.display = 'none';
-      const activeChip = App.el('psFilterBar')?.querySelector('.ps-chip.active');
-      App.renderPatientStatusList(activeChip?.dataset.filter || 'all');
+      App.renderPatientStatusList('');
     } catch (e) {
-      if (loading) { loading.style.display = 'block'; loading.textContent = 'Could not load status. Please try again.'; }
+      container.innerHTML = '<div class="ps-loading">Could not load data. Please try again.</div>';
     }
   },
 
-  renderPatientStatusList(filter) {
+  renderPatientStatusList(query) {
     const container = App.el('psListContainer');
-    const loading   = App.el('psLoading');
-    container.querySelectorAll('.ps-card').forEach(c => c.remove());
+    container.innerHTML = '';
 
+    const q   = (query || '').toLowerCase();
     const all = App._psAllPatients || [];
-    const filtered = all.filter(p => {
-      const s = (p.status || '').toLowerCase();
-      if (filter === 'all')        return true;
-      if (filter === 'unbilled')   return s === 'unbilled';
-      if (filter === 'paid')       return /^paid$|settled/.test(s);
-      if (filter === 'rejected')   return /reject|written off|gap/.test(s);
-      if (filter === 'inprogress') return !['unbilled','paid','settled','rejected','written off','gap'].some(x => s === x || (x.length > 4 && s.includes(x)));
-      return true;
-    });
+    const list = q
+      ? all.filter(p =>
+          (p.patient || '').toLowerCase().includes(q) ||
+          (p.fileNo  || '').toLowerCase().includes(q) ||
+          (p.medAid  || '').toLowerCase().includes(q))
+      : all;
 
-    if (filtered.length === 0) {
-      if (loading) { loading.style.display = 'block'; loading.textContent = 'No patients match this filter.'; }
+    if (!list.length) {
+      container.innerHTML = '<div class="ps-loading">No patients match your search.</div>';
       return;
     }
-    if (loading) loading.style.display = 'none';
+
+    const psStatusClass = s => {
+      if (/^paid$|settled/i.test(s))                     return 'ps-status-green';
+      if (/reject|written off/i.test(s))                 return 'ps-status-red';
+      if (/gap/i.test(s))                                return 'ps-status-red';
+      if (/unbilled/i.test(s))                           return 'ps-status-yellow';
+      if (/billed|submitted|process|awaiting|call|re-process|partial|partly|payment|patient to pay/i.test(s)) return 'ps-status-blue';
+      return 'ps-status-grey';
+    };
 
     const frag = document.createDocumentFragment();
-    filtered.forEach(p => {
-      const s   = (p.status || 'Unbilled');
-      const sc  = /^paid$|settled/i.test(s) ? 'ps-status-green'
-                : /reject|written off/i.test(s) ? 'ps-status-red'
-                : /gap/i.test(s) ? 'ps-status-red'
-                : /unbilled/i.test(s) ? 'ps-status-yellow'
-                : /billed|submitted|in process|awaiting|call|re-process|partial|partly|payment plan|patient to pay/i.test(s) ? 'ps-status-blue'
-                : 'ps-status-grey';
+    list.forEach(p => {
+      const s    = p.status || 'Unbilled';
       const card = document.createElement('div');
       card.className = 'ps-card';
       card.innerHTML = `
         <div class="ps-card-top">
           <div class="ps-card-name">${p.patient || '—'}</div>
-          <span class="ps-status-badge ${sc}">${s}</span>
+          <span class="ps-status-badge ${psStatusClass(s)}">${s}</span>
         </div>
         <div class="ps-card-meta">
-          <span>${p.fileNo ? '#' + p.fileNo : ''}</span>
-          <span>${p.dos || ''}</span>
-          <span>${p.medAid || p.funding || ''}</span>
+          ${p.fileNo ? `<span>#${p.fileNo}</span>` : ''}
+          ${p.dos    ? `<span>${p.dos}</span>`     : ''}
+          ${p.medAid || p.funding ? `<span>${p.medAid || p.funding}</span>` : ''}
         </div>
-        ${p.tariff || p.icd10 ? `<div class="ps-card-codes">${[p.tariff, p.icd10].filter(Boolean).join(' · ')}</div>` : ''}
-        ${p.billed > 0 ? `<div class="ps-card-amount">${App.fmt(p.billed)}${p.outstanding > 0 ? ` · <span class="ps-outstanding">R${p.outstanding.toFixed(2)} outstanding</span>` : ''}</div>` : ''}
+        ${p.tariff || p.icd10 ? `<div class="ps-card-codes">${[p.tariff, p.icd10].filter(Boolean).join('  ·  ')}</div>` : ''}
+        ${p.billed > 0 ? `<div class="ps-card-amount">${App.fmt(p.billed)}${p.outstanding > 0 ? `  ·  <span class="ps-outstanding">${App.fmt(p.outstanding)} outstanding</span>` : ''}</div>` : ''}
       `;
       frag.appendChild(card);
     });

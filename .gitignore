@@ -1,0 +1,30 @@
+# Secrets — NEVER commit these
+.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Local dev / Claude tooling
+.claude/
+preview_server.py
+find_node*.py
+find_node*.ps1
+start_server.ps1
+cleanup.py
+cleanup.ps1
+fix_logos.js
+node_search_results.txt
