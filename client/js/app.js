@@ -38,6 +38,7 @@ const API = {
   async extractCodes(transcript)  { return API._f('/billing/extract',    { method: 'POST', body: { transcript } }); },
   async scanSticker(b64, mt)      { return API._f('/billing/scan-sticker',{ method: 'POST', body: { imageBase64: b64, mediaType: mt } }); },
   async submitBilling(p)          { return API._f('/billing/submit',     { method: 'POST', body: p }); },
+  async saveSticker(p)            { return API._f('/billing/save-sticker',{ method: 'POST', body: p }); },
   async getStats()                { return API._f('/billing/stats'); },
   async getPatientStatus()        { return API._f('/billing/status'); },
   async getCollections()          { return API._f('/billing/collections'); },
@@ -54,15 +55,17 @@ const API = {
 // ═══════════════════════════════════════════════════════════════
 const App = {
   state: {
-    doctor:       null,
-    patients:     [],
-    selected:     null,
-    wardVisits:   [],
-    calSelected:  new Set(),
-    calYear:      new Date().getFullYear(),
-    calMonth:     new Date().getMonth(),
-    billingMode:  'voice',
-    isRecording:  false,
+    doctor:         null,
+    patients:       [],
+    selected:       null,
+    wardVisits:     [],
+    authNo:         '',
+    lastTranscript: '',
+    calSelected:    new Set(),
+    calYear:        new Date().getFullYear(),
+    calMonth:       new Date().getMonth(),
+    billingMode:    'voice',
+    isRecording:    false,
   },
 
   // ── Helpers ───────────────────────────────────────────────
@@ -162,21 +165,172 @@ const App = {
     if (v === 'declan' || v === 'elana') { App.el('loginEmail').value=''; App.triggerEgg(v); }
   },
   triggerEgg(name) {
-    const msgs = { declan:['🚀 The man behind the billing empire!','Hi Declan 👋','💙 Keep building great things'], elana:['🌟 Iconic Billing visionary!','Hi Elana 👋','💙 You make it all happen'] };
+    const eggs = {
+      declan: {
+        msgs: [
+          '👨‍💻 Declan is in the building!',
+          '⚡ The architect of the billing empire',
+          'None of this exists without you 🚀',
+          'Absolute legend. Keep shipping. 💙',
+        ],
+        colors: ['#00ff88','#00ffcc','#39ff14','#00c2ff','#ffffff'],
+      },
+      elana: {
+        msgs: [
+          '✨ The visionary has arrived!',
+          '🌟 Iconic Billing shines because of you',
+          'Your eye for detail makes all the difference 💫',
+          'This one is for you. Always. 💙',
+        ],
+        colors: ['#ff88cc','#ffcc00','#ff44aa','#ffaa44','#ffffff'],
+      },
+    };
+    const egg = eggs[name];
+    if (!egg) return;
+    // Flash the screen with the egg color
+    const flash = document.createElement('div');
+    flash.className = 'egg-flash';
+    flash.style.background = egg.colors[0];
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 700);
+    // Toasts with a slight stagger
     let delay = 0;
-    (msgs[name]||[]).forEach(m => { setTimeout(()=>App.showToast(m,2800),delay); delay+=1000; });
-    setTimeout(()=>App.eggConfetti(),200);
+    egg.msgs.forEach(m => { setTimeout(() => App.showToast(m, 2800), delay); delay += 950; });
+    // Confetti burst
+    setTimeout(() => App.eggConfetti(egg.colors), 150);
+    // Supercharge the neural net
+    if (App._nn) App._nn.setMode(name);
   },
-  eggConfetti() {
-    const colors=['#00c2ff','#0066ff','#00e5a0','#ffb800','#ff4d6a','#fff'];
-    for (let i=0;i<60;i++) {
-      const p=document.createElement('div'), sz=6+Math.random()*8;
-      p.style.cssText=`position:fixed;width:${sz}px;height:${sz}px;background:${colors[i%colors.length]};border-radius:${Math.random()>.5?'50%':'3px'};left:${20+Math.random()*60}%;top:50%;z-index:99998;pointer-events:none;`;
+  eggConfetti(colors) {
+    const c = colors || ['#00c2ff','#0066ff','#00e5a0','#ffb800','#ff4d6a','#fff'];
+    for (let i = 0; i < 80; i++) {
+      const p = document.createElement('div'), sz = 5 + Math.random() * 10;
+      const shapes = ['50%', '3px', '0'];
+      p.style.cssText = `position:fixed;width:${sz}px;height:${sz}px;background:${c[i%c.length]};border-radius:${shapes[i%3]};left:${5+Math.random()*90}%;top:48%;z-index:99998;pointer-events:none;box-shadow:0 0 ${sz*2}px ${c[i%c.length]}88;`;
       document.body.appendChild(p);
-      const dx=(Math.random()-.5)*300,dy=-(100+Math.random()*300),rot=Math.random()*720;
-      p.animate([{transform:'translate(0,0) rotate(0deg)',opacity:1},{transform:`translate(${dx}px,${dy}px) rotate(${rot}deg)`,opacity:0}],{duration:1200+Math.random()*600,easing:'cubic-bezier(0,0.9,0.57,1)',fill:'forwards'});
-      setTimeout(()=>p.remove(),2000);
+      const dx = (Math.random()-.5)*380, dy = -(60+Math.random()*340), rot = Math.random()*900;
+      p.animate(
+        [{transform:'translate(0,0) rotate(0deg)', opacity:1},
+         {transform:`translate(${dx}px,${dy}px) rotate(${rot}deg)`, opacity:0}],
+        {duration:1300+Math.random()*700, easing:'cubic-bezier(0,0.9,0.57,1)', fill:'forwards'}
+      );
+      setTimeout(() => p.remove(), 2200);
     }
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // NEURAL NETWORK BACKGROUND — login screen animation
+  // ═══════════════════════════════════════════════════════════
+  _nn: null,
+  initNeuralNet() {
+    const canvas = App.el('neuralCanvas');
+    if (!canvas) return;
+    if (App._nn) { App._nn.stop(); }
+
+    const ctx = canvas.getContext('2d');
+    let raf, W = 0, H = 0, nodes = [];
+    let mode = 'default';
+
+    const PALETTES = {
+      default: ['#0055cc','#0088ff','#00aaff','#0066dd'],
+      declan:  ['#00ff88','#39ff14','#00ffcc','#00dd66'],
+      elana:   ['#ff55bb','#ffcc00','#ff88cc','#ffaa33'],
+    };
+
+    const LINE_COLOR = {
+      default: (a) => `rgba(0,110,255,${a})`,
+      declan:  (a) => `rgba(0,255,120,${a})`,
+      elana:   (a) => `rgba(255,100,180,${a})`,
+    };
+
+    const MAX_DIST = 155;
+
+    function resize() {
+      const p = canvas.parentElement;
+      W = canvas.width  = p.offsetWidth  || window.innerWidth;
+      H = canvas.height = p.offsetHeight || window.innerHeight;
+      spawnNodes();
+    }
+
+    function spawnNodes() {
+      const count = Math.min(72, Math.max(28, Math.floor((W * H) / 9500)));
+      nodes = Array.from({ length: count }, () => ({
+        x:  Math.random() * W,
+        y:  Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.55,
+        vy: (Math.random() - 0.5) * 0.55,
+        r:  1.4 + Math.random() * 2,
+        phase: Math.random() * Math.PI * 2,
+        phaseSpeed: 0.012 + Math.random() * 0.022,
+      }));
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      const palette   = PALETTES[mode]    || PALETTES.default;
+      const mkLine    = LINE_COLOR[mode]   || LINE_COLOR.default;
+      const speedMult = mode === 'declan' ? 2.8 : mode === 'elana' ? 2.0 : 1;
+      const glowMult  = mode === 'default' ? 1 : 2.5;
+
+      // Draw connections
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < MAX_DIST * MAX_DIST) {
+            const norm  = 1 - Math.sqrt(d2) / MAX_DIST;
+            const alpha = mode === 'default' ? norm * 0.22 : norm * 0.55;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.strokeStyle = mkLine(alpha);
+            ctx.lineWidth   = mode === 'default' ? 0.7 : 1.3;
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Draw nodes
+      for (const n of nodes) {
+        n.phase += n.phaseSpeed * speedMult;
+        const glow  = 0.45 + Math.sin(n.phase) * 0.55;
+        const ci    = Math.abs(Math.floor(n.phase / (Math.PI * 0.8))) % palette.length;
+        const color = palette[ci];
+        const rad   = n.r * (0.65 + glow * 0.7);
+
+        ctx.shadowBlur  = (mode === 'default' ? 7 : 20) * glow * glowMult;
+        ctx.shadowColor = color;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, rad, 0, Math.PI * 2);
+        ctx.fillStyle   = color;
+        ctx.globalAlpha = 0.45 + glow * 0.55;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur  = 0;
+
+        // Move
+        n.x += n.vx * speedMult;
+        n.y += n.vy * speedMult;
+        if (n.x < 0) { n.x = 0; n.vx =  Math.abs(n.vx); }
+        if (n.x > W) { n.x = W; n.vx = -Math.abs(n.vx); }
+        if (n.y < 0) { n.y = 0; n.vy =  Math.abs(n.vy); }
+        if (n.y > H) { n.y = H; n.vy = -Math.abs(n.vy); }
+      }
+
+      raf = requestAnimationFrame(draw);
+    }
+
+    resize();
+    draw();
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas.parentElement);
+
+    App._nn = {
+      stop()     { cancelAnimationFrame(raf); ro.disconnect(); ctx.clearRect(0,0,W,H); App._nn = null; },
+      setMode(m) { mode = m; setTimeout(() => { mode = 'default'; }, 3800); },
+    };
   },
 
   // ═══════════════════════════════════════════════════════════
@@ -186,6 +340,7 @@ const App = {
     App.showScreen('loginScreen');
     ['loginError'].forEach(id=>{const e=App.el(id);if(e)e.style.display='none';});
     ['loginEmail','loginPassword'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
+    requestAnimationFrame(() => App.initNeuralNet());
   },
 
   async login() {
@@ -368,7 +523,7 @@ const App = {
   // BILLING FLOW
   // ═══════════════════════════════════════════════════════════
   startNewBilling(){
-    App.state.selected=null;App.state.wardVisits=[];App.state.calSelected.clear();
+    App.state.selected=null;App.state.wardVisits=[];App.state.authNo='';App.state.lastTranscript='';App.state.calSelected.clear();
     App.el('dashboardScreen').style.display='none';
     App.el('stepsBar').style.display='flex';
     App.resetVoice();App.resetCalendar();App.switchBillingMode('voice');
@@ -377,7 +532,7 @@ const App = {
   },
 
   samePatientNewVisit(){
-    App.state.wardVisits=[];App.state.calSelected.clear();
+    App.state.wardVisits=[];App.state.authNo='';App.state.lastTranscript='';App.state.calSelected.clear();
     App.el('dashboardScreen').style.display='none';
     App.el('stepsBar').style.display='flex';
     App.resetVoice();App.resetCalendar();App.switchBillingMode('voice');
