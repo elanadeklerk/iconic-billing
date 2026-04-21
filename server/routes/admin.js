@@ -229,4 +229,60 @@ router.post('/test-notify/:id', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/admin-users
+ * Returns all independent admin users.
+ */
+router.get('/admin-users', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('admin_users')
+      .select('id, email, created_at')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    res.json({ admin_users: data || [] });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not load admin users: ' + err.message });
+  }
+});
+
+/**
+ * POST /api/admin/admin-users
+ * Adds an independent admin user by email.
+ */
+router.post('/admin-users', async (req, res) => {
+  const email = (req.body.email || '').toLowerCase().trim();
+  if (!email) return res.status(400).json({ error: 'Email is required.' });
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('admin_users')
+      .insert({ email, created_by: req.user.email })
+      .select('id, email, created_at')
+      .single();
+    if (error) {
+      if (error.code === '23505') return res.status(409).json({ error: 'This email is already an admin.' });
+      throw error;
+    }
+    res.status(201).json({ ok: true, admin_user: data });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not add admin user: ' + err.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/admin-users/:id
+ */
+router.delete('/admin-users/:id', async (req, res) => {
+  try {
+    const { error } = await supabaseAdmin
+      .from('admin_users')
+      .delete()
+      .eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not remove admin user: ' + err.message });
+  }
+});
+
 module.exports = router;

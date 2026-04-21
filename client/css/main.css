@@ -1723,6 +1723,134 @@
   .db-th:nth-child(2), .db-td:nth-child(2) { display:none; }
 }
 
+/* ── Admin tab navigation ────────────────────────────────────── */
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 57px;
+  z-index: 90;
+}
+.admin-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text3);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 14px 10px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.admin-tab:hover { color: var(--text2); }
+.admin-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.admin-tab-panel { padding-top: 16px; }
+
+/* ── Admin form section labels ───────────────────────────────── */
+.admin-form-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(0,194,255,0.15);
+}
+
+/* ── Admin cancel button ─────────────────────────────────────── */
+.admin-cancel-btn {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 12px;
+  border-radius: 11px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+.admin-cancel-btn:hover { border-color: var(--text2); }
+
+/* ── Admin user list ─────────────────────────────────────────── */
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.admin-user-row:last-child { border-bottom: none; }
+.admin-user-email {
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--text);
+}
+.admin-user-meta {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+.admin-user-del-btn {
+  background: none;
+  border: 1px solid rgba(255,77,106,0.3);
+  color: var(--danger);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: var(--font);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.admin-user-del-btn:hover { background: rgba(255,77,106,0.1); }
+
+/* Doctor card grid */
+.dr-card-grid { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.dr-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.15s;
+}
+.dr-card:hover { border-color: rgba(0,194,255,0.25); }
+.dr-card-avatar {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; color: white; flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.dr-card-info { flex: 1; min-width: 0; }
+.dr-card-name { font-size: 13px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-card-email { font-size: 11px; color: var(--text3); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+.dr-card-status {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; flex-shrink: 0;
+}
+.dr-card-status.ready { background: rgba(0,229,160,0.1); color: var(--success); border: 1px solid rgba(0,229,160,0.2); }
+.dr-card-status.setup { background: rgba(255,184,0,0.1); color: var(--warning); border: 1px solid rgba(255,184,0,0.2); }
+.dr-card-edit {
+  background: none; border: 1px solid var(--border); color: var(--text2);
+  border-radius: 8px; padding: 6px 12px; font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: var(--font); flex-shrink: 0; transition: all 0.15s;
+}
+.dr-card-edit:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ── Sheet modal fullscreen ──────────────────────────────────── */
 .sheet-modal { position:fixed; inset:0; z-index:6000; background:var(--bg); display:flex; flex-direction:column; }
 .sheet-iframe { flex:1; border:none; width:100%; }

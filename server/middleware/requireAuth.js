@@ -36,16 +36,27 @@ async function requireAuth(req, res, next) {
 
 async function requireAdmin(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated.' });
+  const email = req.user.email.toLowerCase();
+  // 1. Primary admin via env var
   const envAdmin = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
-  if (req.user.email.toLowerCase() === envAdmin) return next();
-  // Also allow doctors with is_admin = true in the database
+  if (email === envAdmin) return next();
+  // 2. Independent admin_users table
   try {
-    const { data } = await supabaseAdmin
+    const { data: auRow } = await supabaseAdmin
+      .from('admin_users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+    if (auRow) return next();
+  } catch (_) {}
+  // 3. Legacy: doctors with is_admin = true
+  try {
+    const { data: drRow } = await supabaseAdmin
       .from('doctors')
       .select('is_admin')
-      .eq('email', req.user.email)
-      .single();
-    if (data?.is_admin === true) return next();
+      .eq('email', email)
+      .maybeSingle();
+    if (drRow?.is_admin === true) return next();
   } catch (_) {}
   return res.status(403).json({ error: 'Admin access only.' });
 }

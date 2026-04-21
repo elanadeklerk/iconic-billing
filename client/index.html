@@ -320,71 +320,94 @@
 
 <!-- ── Admin Screen ──────────────────────────────────────────── -->
 <div class="admin-screen" id="adminScreen" style="display:none;">
+
+  <!-- Header -->
   <div class="admin-header">
     <div>
       <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--danger);margin-bottom:3px;">Control Panel</div>
       <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.02em;">Iconic Billing Admin</div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <button id="adminRevenueBtn" style="background:rgba(0,194,255,0.1);border:1px solid rgba(0,194,255,0.3);color:var(--accent);padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);">💰 Revenue</button>
-      <button class="admin-exit-btn" id="exitAdminBtn">← Exit</button>
-    </div>
+    <button class="admin-exit-btn" id="exitAdminBtn">← Exit</button>
   </div>
-  <!-- Revenue panel inside admin -->
-  <div id="adminRevenuePanel" style="display:none;margin:0 16px 16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);">
-      <div style="font-size:13px;font-weight:700;color:var(--text);">Revenue Overview</div>
-      <div style="display:flex;gap:8px;">
-        <button id="adminRefreshRevBtn" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;">↻ Refresh</button>
-        <button id="adminCloseRevBtn" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1;">✕</button>
-      </div>
-    </div>
-    <div id="adminRevenueContent" style="padding:16px;"><div style="text-align:center;color:var(--text3);padding:20px;font-size:12px;">Click Revenue to load</div></div>
-  </div>
-  <div class="admin-table-wrap">
-    <div class="admin-table-toolbar">
-      <div style="font-size:13px;font-weight:700;color:var(--text);">Doctors <span id="adminDoctorCount" style="color:var(--text3);font-weight:400;"></span></div>
-      <button class="admin-add-btn" id="showAdminFormBtn">+ Add Doctor</button>
-    </div>
-    <div id="adminDoctorTable"><div style="text-align:center;padding:32px;color:var(--text3);font-size:12px;">Loading…</div></div>
-  </div>
-  <div id="adminFormWrap" style="display:none;">
-    <div class="admin-form-header">
-      <div style="font-size:14px;font-weight:700;color:var(--text);" id="adminFormTitle">Add New Doctor</div>
-      <button id="hideAdminFormBtn" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;">✕</button>
-    </div>
-    <div class="admin-form-card">
-      <input type="hidden" id="adminEditUserId" />
-      <div class="admin-form-row">
-        <div><label class="admin-field-label">Doctor Full Name *</label><input class="admin-input" type="text" id="adminDrName" placeholder="Dr Jane Smith" autocomplete="off" /></div>
-        <div><label class="admin-field-label">Email Address *</label><input class="admin-input" type="email" id="adminDrEmail" placeholder="dr@practice.co.za" autocomplete="off" /></div>
-      </div>
-      <div class="admin-form-row">
-        <div><label class="admin-field-label">Login Password</label><div class="pw-wrap"><input class="admin-input" type="password" id="adminDrPassword" placeholder="Set login password" autocomplete="new-password" /><button class="pw-toggle" id="adminPwToggle" type="button">👁</button></div></div>
-        <div><label class="admin-field-label">Intake Tab Name</label><input class="admin-input" type="text" id="adminIntakeTab" placeholder="Form Responses 1" autocomplete="off" /></div>
-      </div>
-      <div class="admin-form-row">
-        <div><label class="admin-field-label">Intake Form ID *</label><input class="admin-input" type="text" id="adminSheetId" placeholder="Sheet ID from URL" autocomplete="off" spellcheck="false" /><div style="font-size:11px;color:var(--text3);margin-top:4px;">Google Sheet linked to your patient intake Google Form — contains patient details (Form Responses 1 tab)</div></div>
-        <div><label class="admin-field-label">Collections Sheet ID *</label><input class="admin-input" type="text" id="adminCollectionsId" placeholder="Sheet ID from URL" autocomplete="off" spellcheck="false" /><div style="font-size:11px;color:var(--text3);margin-top:4px;">Google Sheet where billing submissions land via Apps Script — contains Billing Log and Collections Summary</div></div>
-      </div>
-      <div class="admin-form-row">
-        <div><label class="admin-field-label">Apps Script URL *</label><input class="admin-input" type="text" id="adminAppsScript" placeholder="https://script.google.com/…" autocomplete="off" spellcheck="false" /><div style="font-size:11px;color:var(--text3);margin-top:4px;">Apps Script URL deployed from your Collections Sheet</div></div>
-        <div><label class="admin-field-label">Google API Key *</label><input class="admin-input" type="text" id="adminGoogleKey" placeholder="AIzaSy…" autocomplete="off" spellcheck="false" /></div>
-      </div>
-      <div class="admin-form-row">
-        <div><label class="admin-field-label">Anthropic API Key *</label><input class="admin-input" type="text" id="adminAnthropicKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" /></div>
-        <div></div>
-      </div>
 
-      <!-- Sheet Column Mapping -->
-      <div style="margin-top:20px;padding:16px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,0.02);">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);">Sheet Column Mapping</div>
-          <button id="loadColHeadersBtn" type="button" style="font-size:11px;background:none;border:1px solid var(--accent);color:var(--accent);padding:4px 12px;border-radius:8px;cursor:pointer;font-family:var(--font);">Load Headers</button>
+  <!-- Tab Navigation -->
+  <div class="admin-tabs">
+    <button class="admin-tab active" data-admintab="doctors">🩺 Doctors</button>
+    <button class="admin-tab" data-admintab="admins">🔐 Admin Users</button>
+    <button class="admin-tab" data-admintab="revenue">💰 Revenue</button>
+  </div>
+
+  <!-- ── Tab: Doctors ─────────────────────────────────────── -->
+  <div class="admin-tab-panel" id="adminTabDoctors">
+    <div class="admin-table-wrap">
+      <div class="admin-table-toolbar">
+        <div style="font-size:13px;font-weight:700;color:var(--text);">Doctors <span id="adminDoctorCount" style="color:var(--text3);font-weight:400;"></span></div>
+        <button class="admin-add-btn" id="showAdminFormBtn">+ Add Doctor</button>
+      </div>
+      <div id="adminDoctorTable"><div style="text-align:center;padding:32px;color:var(--text3);font-size:12px;">Loading…</div></div>
+    </div>
+
+    <!-- Doctor Form -->
+    <div id="adminFormWrap" style="display:none;">
+      <div class="admin-form-header">
+        <div style="font-size:14px;font-weight:700;color:var(--text);" id="adminFormTitle">Add New Doctor</div>
+        <button id="hideAdminFormBtn" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1;">✕</button>
+      </div>
+      <div class="admin-form-card">
+        <input type="hidden" id="adminEditUserId" />
+
+        <!-- Section: Identity -->
+        <div class="admin-form-section-label">Account</div>
+        <div class="admin-form-row">
+          <div><label class="admin-field-label">Doctor Full Name *</label><input class="admin-input" type="text" id="adminDrName" placeholder="Dr Jane Smith" autocomplete="off" /></div>
+          <div><label class="admin-field-label">Email Address *</label><input class="admin-input" type="email" id="adminDrEmail" placeholder="dr@practice.co.za" autocomplete="off" /></div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Map which column in this doctor's sheet contains each patient field. Click <em>Load Headers</em> to auto-populate options from row 1.</div>
+        <div class="admin-form-row">
+          <div><label class="admin-field-label">Login Password</label><div class="pw-wrap"><input class="admin-input" type="password" id="adminDrPassword" placeholder="Set or change password" autocomplete="new-password" /><button class="pw-toggle" id="adminPwToggle" type="button">👁</button></div></div>
+          <div><label class="admin-field-label">Intake Tab Name</label><input class="admin-input" type="text" id="adminIntakeTab" placeholder="Form Responses 1" autocomplete="off" /></div>
+        </div>
+
+        <!-- Section: Google Sheets -->
+        <div class="admin-form-section-label" style="margin-top:20px;">Google Sheets</div>
+        <div class="admin-form-row">
+          <div>
+            <label class="admin-field-label">Intake Form Sheet ID *</label>
+            <input class="admin-input" type="text" id="adminSheetId" placeholder="Sheet ID from URL" autocomplete="off" spellcheck="false" />
+            <div class="admin-field-hint">Linked to your patient intake Google Form (Form Responses 1 tab)</div>
+          </div>
+          <div>
+            <label class="admin-field-label">Collections Sheet ID *</label>
+            <input class="admin-input" type="text" id="adminCollectionsId" placeholder="Sheet ID from URL" autocomplete="off" spellcheck="false" />
+            <div class="admin-field-hint">Where billing submissions land via Apps Script</div>
+          </div>
+        </div>
+        <div class="admin-form-row">
+          <div>
+            <label class="admin-field-label">Apps Script URL *</label>
+            <input class="admin-input" type="text" id="adminAppsScript" placeholder="https://script.google.com/…" autocomplete="off" spellcheck="false" />
+            <div class="admin-field-hint">Deployed from your Collections Sheet</div>
+          </div>
+          <div>
+            <label class="admin-field-label">Google API Key *</label>
+            <input class="admin-input" type="text" id="adminGoogleKey" placeholder="AIzaSy…" autocomplete="off" spellcheck="false" />
+          </div>
+        </div>
+
+        <!-- Section: AI -->
+        <div class="admin-form-section-label" style="margin-top:20px;">AI</div>
+        <div class="admin-form-row">
+          <div><label class="admin-field-label">Anthropic API Key *</label><input class="admin-input" type="text" id="adminAnthropicKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" /></div>
+          <div></div>
+        </div>
+
+        <!-- Section: Column Mapping -->
+        <div class="admin-form-section-label" style="margin-top:20px;">Sheet Column Mapping</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Map which column holds each patient field. <strong>Save the doctor first</strong>, then click Load Headers to auto-fill from row 1.</div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+          <button id="loadColHeadersBtn" type="button" style="font-size:11px;background:none;border:1px solid var(--accent);color:var(--accent);padding:5px 14px;border-radius:8px;cursor:pointer;font-family:var(--font);">↓ Load Headers</button>
+        </div>
         <div id="colHeaderStatus" style="font-size:11px;color:var(--text3);margin-bottom:8px;display:none;"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="admin-form-row">
           <div><label class="admin-field-label">File Number</label><select class="admin-input" id="colMapFileNo"></select></div>
           <div><label class="admin-field-label">Patient Name</label><select class="admin-input" id="colMapName"></select></div>
           <div><label class="admin-field-label">Funding Type</label><select class="admin-input" id="colMapFunding"></select></div>
@@ -393,46 +416,79 @@
           <div><label class="admin-field-label">Membership No</label><select class="admin-input" id="colMapMembNo"></select></div>
           <div><label class="admin-field-label">Dependant Code</label><select class="admin-input" id="colMapDepCode"></select></div>
         </div>
-      </div>
 
-      <!-- Billing Notifications -->
-      <div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border);">
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:4px;">Billing Notifications</div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">Automatically notify the doctor after each billing entry is submitted.</div>
-
-        <!-- Email -->
+        <!-- Section: Notifications -->
+        <div class="admin-form-section-label" style="margin-top:20px;">Billing Notifications</div>
         <div style="background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.12);border-radius:12px;padding:14px 16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-size:16px;">📧</span>
-              <span style="font-size:13px;font-weight:600;color:var(--text1);">Email</span>
+              <span style="font-size:15px;">📧</span>
+              <span style="font-size:13px;font-weight:600;color:var(--text);">Email Digest</span>
+              <span style="font-size:10px;color:var(--text3);">every 2 hours</span>
             </div>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-              <span style="font-size:12px;color:var(--text3);">Enable</span>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <span style="font-size:11px;color:var(--text3);">Enable</span>
               <input type="checkbox" id="adminNotifyEmail" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);" />
             </label>
           </div>
           <label class="admin-field-label">Notification Email Address</label>
-          <input class="admin-input" type="email" id="adminNotifyEmailAddr" placeholder="dr@practice.co.za" autocomplete="off" />
+          <input class="admin-input" type="email" id="adminNotifyEmailAddr" placeholder="billing@practice.co.za" autocomplete="off" />
         </div>
-      </div>
 
-      <!-- Admin Access -->
-      <div style="margin-top:16px;padding:14px 16px;background:rgba(255,80,80,0.05);border:1px solid rgba(255,80,80,0.15);border-radius:12px;display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text1);">Admin Access</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Allow this doctor to access the admin panel</div>
+        <!-- Actions -->
+        <div style="display:flex;gap:10px;margin-top:24px;">
+          <button class="admin-save-btn" id="adminSaveBtn">Save Doctor</button>
+          <button id="adminCancelFormBtn" class="admin-cancel-btn">Cancel</button>
         </div>
-        <input type="checkbox" id="adminIsAdmin" style="width:18px;height:18px;cursor:pointer;accent-color:var(--danger);" />
+        <div class="admin-msg" id="adminMsg"></div>
       </div>
-
-      <div style="display:flex;gap:10px;margin-top:20px;">
-        <button class="admin-save-btn" id="adminSaveBtn">Save Doctor</button>
-        <button id="adminCancelFormBtn" style="flex:1;background:none;border:1px solid var(--border);color:var(--text2);padding:12px;border-radius:12px;cursor:pointer;font-family:var(--font);font-size:13px;">Cancel</button>
-      </div>
-      <div class="admin-msg" id="adminMsg"></div>
     </div>
   </div>
+
+  <!-- ── Tab: Admin Users ─────────────────────────────────── -->
+  <div class="admin-tab-panel" id="adminTabAdmins" style="display:none;">
+    <div class="admin-table-wrap">
+      <div class="admin-table-toolbar">
+        <div style="font-size:13px;font-weight:700;color:var(--text);">Admin Users <span id="adminUserCount" style="color:var(--text3);font-weight:400;"></span></div>
+        <button class="admin-add-btn" id="showAdminUserFormBtn">+ Add Admin</button>
+      </div>
+      <div id="adminUserTable"><div style="text-align:center;padding:32px;color:var(--text3);font-size:12px;">Loading…</div></div>
+    </div>
+
+    <!-- Add admin user form -->
+    <div id="adminUserFormWrap" style="display:none;">
+      <div class="admin-form-header">
+        <div style="font-size:14px;font-weight:700;color:var(--text);">Add Admin User</div>
+        <button id="hideAdminUserFormBtn" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1;">✕</button>
+      </div>
+      <div class="admin-form-card">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6;">This email will have full access to the admin panel. They must already have a doctor account <em>or</em> you can set up a separate Supabase auth account for them.</div>
+        <label class="admin-field-label">Email Address *</label>
+        <input class="admin-input" type="email" id="adminUserEmail" placeholder="admin@practice.co.za" autocomplete="off" />
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <button class="admin-save-btn" id="adminUserSaveBtn">Add Admin</button>
+          <button id="adminUserCancelBtn" class="admin-cancel-btn">Cancel</button>
+        </div>
+        <div class="admin-msg" id="adminUserMsg"></div>
+      </div>
+    </div>
+
+    <div style="margin:0 16px 16px;padding:12px 14px;background:rgba(255,184,0,0.06);border:1px solid rgba(255,184,0,0.2);border-radius:12px;font-size:12px;color:var(--text3);line-height:1.6;">
+      <span style="color:var(--warning);font-weight:700;">Note:</span> The primary superadmin is set via the <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;">ADMIN_EMAIL</code> environment variable and cannot be removed from here.
+    </div>
+  </div>
+
+  <!-- ── Tab: Revenue ─────────────────────────────────────── -->
+  <div class="admin-tab-panel" id="adminTabRevenue" style="display:none;">
+    <div style="margin:0 16px 16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-size:13px;font-weight:700;color:var(--text);">Revenue Overview</div>
+        <button id="adminRefreshRevBtn" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);">↻ Refresh</button>
+      </div>
+      <div id="adminRevenueContent" style="padding:16px;"><div style="text-align:center;color:var(--text3);padding:20px;font-size:12px;">Loading revenue data…</div></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ── Sticker Scanner Modal ─────────────────────────────────── -->

@@ -48,6 +48,9 @@ const API = {
   async createDoctor(p)           { return API._f('/admin/doctors',      { method: 'POST', body: p }); },
   async updateDoctor(id, p)       { return API._f('/admin/doctors/' + id,{ method: 'PATCH', body: p }); },
   async getSheetHeaders(id)       { return API._f('/admin/doctors/' + id + '/sheet-headers'); },
+  async getAdminUsers()           { return API._f('/admin/admin-users'); },
+  async createAdminUser(p)        { return API._f('/admin/admin-users',   { method: 'POST', body: p }); },
+  async deleteAdminUser(id)       { return API._f('/admin/admin-users/' + id, { method: 'DELETE' }); },
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -195,7 +198,7 @@ const App = {
     setTimeout(() => flash.remove(), 700);
     // Toasts with a slight stagger
     let delay = 0;
-    egg.msgs.forEach(m => { setTimeout(() => App.showToast(m, 2800), delay); delay += 950; });
+    egg.msgs.forEach(m => { setTimeout(() => App.showToast(m, 3200), delay); delay += 1600; });
     // Confetti burst
     setTimeout(() => App.eggConfetti(egg.colors), 150);
     // Supercharge the neural net
@@ -391,6 +394,7 @@ const App = {
       App.hideAdminLogin();
       App.showScreen('adminScreen');
       App.clearAdminForm();
+      App.switchAdminTab('doctors');
       await App.loadAdminDoctors();
     } catch(e){err.textContent=e.message;err.style.display='block';}
     finally{btn.disabled=false;btn.textContent='Enter Admin Panel';}
@@ -955,14 +959,21 @@ const App = {
   // ADMIN
   // ═══════════════════════════════════════════════════════════
 
-  toggleAdminRevenue(){
-    const panel = App.el('adminRevenuePanel');
-    if (panel.style.display === 'none') {
-      panel.style.display = 'block';
-      App.loadAdminRevenue();
-    } else {
-      panel.style.display = 'none';
-    }
+  // ── Admin tab switching ────────────────────────────────────────
+  switchAdminTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.admin-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.admintab === tab);
+    });
+    // Show/hide panels
+    const panels = { doctors:'adminTabDoctors', admins:'adminTabAdmins', revenue:'adminTabRevenue' };
+    Object.entries(panels).forEach(([key, id]) => {
+      const el = App.el(id);
+      if (el) el.style.display = key === tab ? 'block' : 'none';
+    });
+    // Auto-load content for the active tab
+    if (tab === 'revenue') App.loadAdminRevenue();
+    if (tab === 'admins')  App.loadAdminUsers();
   },
 
   async loadAdminRevenue(){
@@ -1009,25 +1020,34 @@ const App = {
     try{
       const{doctors}=await API.getDoctors();
       if(App.el('adminDoctorCount')) App.el('adminDoctorCount').textContent='('+(doctors?.length||0)+')';
-      if(!doctors?.length){t.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3);">No doctors yet.</div>';return;}
-      t.innerHTML=`<div class="db-table"><div class="db-table-head"><div class="db-th">Doctor</div><div class="db-th">Email</div><div class="db-th">Sheet</div><div class="db-th">Status</div><div class="db-th">Actions</div></div>${doctors.map(dr=>{const ready=!!(dr.intake_sheet_id&&dr.collections_sheet_id&&dr.apps_script_url);const ini=(dr.doctor_name||'DR').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();return`<div class="db-table-row"><div class="db-td"><div style="display:flex;align-items:center;gap:8px;"><div style="width:28px;height:28px;border-radius:8px;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;">${ini}</div><span style="font-weight:600;font-size:13px;">${dr.doctor_name||'—'}</span></div></div><div class="db-td" style="font-size:12px;color:var(--text2);font-family:var(--mono);">${dr.email||'—'}</div><div class="db-td" style="font-size:11px;color:var(--text3);font-family:var(--mono);">${dr.intake_sheet_id?dr.intake_sheet_id.substring(0,12)+'…':'—'}</div><div class="db-td"><span style="font-size:10px;padding:3px 8px;border-radius:20px;background:${ready?'rgba(0,229,160,0.1)':'rgba(255,184,0,0.1)'};color:${ready?'var(--success)':'var(--warning)'};">${ready?'✓ Ready':'⚠ Setup'}</span></div><div class="db-td"><button class="db-action-btn" data-drid="${JSON.stringify(dr).replace(/"/g,'&quot;')}">Edit</button></div></div>`;}).join('')}</div>`;
+      if(!doctors?.length){t.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3);">No doctors yet. Add one to get started.</div>';return;}
+      t.innerHTML=`<div class="dr-card-grid">${doctors.map(dr=>{
+        const ready=!!(dr.intake_sheet_id&&dr.collections_sheet_id&&dr.apps_script_url);
+        const ini=(dr.doctor_name||'DR').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+        return`<div class="dr-card">
+          <div class="dr-card-avatar">${ini}</div>
+          <div class="dr-card-info">
+            <div class="dr-card-name">${dr.doctor_name||'—'}</div>
+            <div class="dr-card-email">${dr.email||'—'}</div>
+          </div>
+          <span class="dr-card-status ${ready?'ready':'setup'}">${ready?'✓ Ready':'⚠ Setup'}</span>
+          <button class="dr-card-edit" data-drid="${JSON.stringify(dr).replace(/"/g,'&quot;')}">Edit</button>
+        </div>`;
+      }).join('')}</div>`;
     }catch(e){t.innerHTML=`<div style="color:var(--danger);padding:16px;">Error: ${e.message}</div>`;}
   },
   showAdminForm(){App.clearAdminForm();App.el('adminFormWrap').style.display='block';App.el('adminFormTitle').textContent='Add New Doctor';App.el('adminFormWrap').scrollIntoView({behavior:'smooth'});},
   hideAdminForm(){App.el('adminFormWrap').style.display='none';App.clearAdminForm();},
   adminEditDoctor(dr){
     App.el('adminEditUserId').value=dr.id||'';App.el('adminDrName').value=dr.doctor_name||'';App.el('adminDrEmail').value=dr.email||'';App.el('adminDrPassword').value='';App.el('adminSheetId').value=dr.intake_sheet_id||'';App.el('adminIntakeTab').value=dr.intake_tab_name||'Form Responses 1';App.el('adminAppsScript').value=dr.apps_script_url||'';App.el('adminGoogleKey').value='';App.el('adminAnthropicKey').value='';App.el('adminCollectionsId').value=dr.collections_sheet_id||'';
-    // Notification settings
-    if(App.el('adminNotifyEmailAddr'))App.el('adminNotifyEmailAddr').value = dr.notify_email         || '';
+    if(App.el('adminNotifyEmailAddr'))App.el('adminNotifyEmailAddr').value = dr.notify_email||'';
     if(App.el('adminNotifyEmail'))    App.el('adminNotifyEmail').checked   = !!dr.notify_email_enabled;
-    if(App.el('adminIsAdmin')) App.el('adminIsAdmin').checked = !!dr.is_admin;
     App.setColMapDropdowns(dr.sheet_column_map||{});
     App.el('adminFormTitle').textContent='Edit — '+(dr.doctor_name||'Doctor');App.el('adminSaveBtn').textContent='Update Doctor';App.el('adminMsg').style.display='none';App.el('adminFormWrap').style.display='block';App.el('adminFormWrap').scrollIntoView({behavior:'smooth'});
   },
   clearAdminForm(){
     ['adminEditUserId','adminDrName','adminDrEmail','adminDrPassword','adminSheetId','adminAppsScript','adminGoogleKey','adminAnthropicKey','adminCollectionsId','adminNotifyEmailAddr'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
     const notifyEmailChk=App.el('adminNotifyEmail');if(notifyEmailChk)notifyEmailChk.checked=false;
-    const isAdminChk=App.el('adminIsAdmin');if(isAdminChk)isAdminChk.checked=false;
     if(App.el('adminIntakeTab'))App.el('adminIntakeTab').value='Form Responses 1';
     if(App.el('adminSaveBtn'))App.el('adminSaveBtn').textContent='Save Doctor';
     if(App.el('adminMsg'))App.el('adminMsg').style.display='none';
@@ -1037,7 +1057,7 @@ const App = {
   async adminSave(){
     const btn=App.el('adminSaveBtn'),editId=App.el('adminEditUserId').value.trim();
     const colMap={fileNo:parseInt(App.el('colMapFileNo')?.value)||1,name:parseInt(App.el('colMapName')?.value)||2,funding:parseInt(App.el('colMapFunding')?.value)||10,medAid:parseInt(App.el('colMapMedAid')?.value)||11,plan:parseInt(App.el('colMapPlan')?.value)||12,membNo:parseInt(App.el('colMapMembNo')?.value)||13,depCode:parseInt(App.el('colMapDepCode')?.value)||14};
-    const f={doctor_name:App.el('adminDrName').value.trim(),email:App.el('adminDrEmail').value.trim(),password:App.el('adminDrPassword').value.trim(),intake_sheet_id:App.el('adminSheetId').value.trim(),intake_tab_name:App.el('adminIntakeTab').value.trim()||'Form Responses 1',apps_script_url:App.el('adminAppsScript').value.trim(),google_key:App.el('adminGoogleKey').value.trim(),anthropic_key:App.el('adminAnthropicKey').value.trim(),collections_sheet_id:App.el('adminCollectionsId').value.trim()||null,sheet_column_map:colMap,notify_email:App.el('adminNotifyEmailAddr')?.value.trim()||'',notify_email_enabled:App.el('adminNotifyEmail')?.checked||false,is_admin:App.el('adminIsAdmin')?.checked||false};
+    const f={doctor_name:App.el('adminDrName').value.trim(),email:App.el('adminDrEmail').value.trim(),password:App.el('adminDrPassword').value.trim(),intake_sheet_id:App.el('adminSheetId').value.trim(),intake_tab_name:App.el('adminIntakeTab').value.trim()||'Form Responses 1',apps_script_url:App.el('adminAppsScript').value.trim(),google_key:App.el('adminGoogleKey').value.trim(),anthropic_key:App.el('adminAnthropicKey').value.trim(),collections_sheet_id:App.el('adminCollectionsId').value.trim()||null,sheet_column_map:colMap,notify_email:App.el('adminNotifyEmailAddr')?.value.trim()||'',notify_email_enabled:App.el('adminNotifyEmail')?.checked||false};
     if(!f.doctor_name||!f.email||!f.intake_sheet_id||!f.collections_sheet_id||!f.apps_script_url){App.showAdminMsg('Fill in Name, Email, Intake Form ID, Collections Sheet ID and Apps Script URL.','error');return;}
     if(!editId&&(!f.google_key||!f.anthropic_key||!f.password)){App.showAdminMsg('Google key, Anthropic key and password required for new doctors.','error');return;}
     const p={...f};if(!p.google_key)delete p.google_key;if(!p.anthropic_key)delete p.anthropic_key;if(!p.password)delete p.password;
@@ -1048,7 +1068,43 @@ const App = {
     }catch(e){App.showAdminMsg('Error: '+e.message,'error');}
     finally{btn.disabled=false;btn.textContent=editId?'Update Doctor':'Save Doctor';}
   },
-  showAdminMsg(msg,type){const e=App.el('adminMsg');e.textContent=msg;e.className='admin-msg '+type;e.style.display='block';},
+  showAdminMsg(msg,type){const e=App.el('adminMsg');if(!e)return;e.textContent=msg;e.className='admin-msg '+type;e.style.display='block';},
+
+  // ── Admin users (independent admin accounts) ───────────────────
+  async loadAdminUsers(){
+    const t=App.el('adminUserTable');if(!t)return;
+    t.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3);font-size:12px;">Loading…</div>';
+    try{
+      const{admin_users}=await API.getAdminUsers();
+      if(App.el('adminUserCount')) App.el('adminUserCount').textContent='('+(admin_users?.length||0)+')';
+      if(!admin_users?.length){t.innerHTML='<div style="text-align:center;padding:28px;color:var(--text3);font-size:12px;">No additional admin users yet.</div>';return;}
+      t.innerHTML=admin_users.map(u=>`<div class="admin-user-row">
+        <div><div class="admin-user-email">${u.email}</div><div class="admin-user-meta">Added ${new Date(u.created_at).toLocaleDateString('en-ZA')}</div></div>
+        <button class="admin-user-del-btn" data-uid="${u.id}">Remove</button>
+      </div>`).join('');
+    }catch(e){t.innerHTML=`<div style="color:var(--danger);padding:16px;font-size:12px;">Error: ${e.message}</div>`;}
+  },
+  showAdminUserForm(){App.el('adminUserFormWrap').style.display='block';App.el('adminUserEmail').value='';App.el('adminUserMsg').style.display='none';App.el('adminUserFormWrap').scrollIntoView({behavior:'smooth'});},
+  hideAdminUserForm(){App.el('adminUserFormWrap').style.display='none';},
+  async saveAdminUser(){
+    const btn=App.el('adminUserSaveBtn'),email=App.el('adminUserEmail').value.trim();
+    if(!email){App.showAdminUserMsg('Email is required.','error');return;}
+    btn.disabled=true;btn.textContent='Adding…';
+    try{
+      await API.createAdminUser({email});
+      App.showAdminUserMsg('✓ Admin user added.','success');
+      App.el('adminUserEmail').value='';
+      App.el('adminUserFormWrap').style.display='none';
+      await App.loadAdminUsers();
+    }catch(e){App.showAdminUserMsg('Error: '+e.message,'error');}
+    finally{btn.disabled=false;btn.textContent='Add Admin';}
+  },
+  async deleteAdminUser(id){
+    if(!confirm('Remove this admin user?'))return;
+    try{await API.deleteAdminUser(id);await App.loadAdminUsers();}
+    catch(e){App.showToast('Error: '+e.message);}
+  },
+  showAdminUserMsg(msg,type){const e=App.el('adminUserMsg');if(!e)return;e.textContent=msg;e.className='admin-msg '+type;e.style.display='block';},
 
   // Column-mapping helpers
   COL_MAP_DEFAULTS:{fileNo:1,name:2,funding:10,medAid:11,plan:12,membNo:13,depCode:14},
@@ -1248,21 +1304,32 @@ const App = {
     on('adminCancelFormBtn','click',()=>App.hideAdminForm());
     on('adminSaveBtn','click',      ()=>App.adminSave());
     on('loadColHeadersBtn','click', ()=>App.loadColHeaders());
-    on('adminRevenueBtn',    'click', ()=>App.toggleAdminRevenue());
     on('adminRefreshRevBtn', 'click', ()=>App.loadAdminRevenue());
-    on('adminCloseRevBtn',   'click', ()=>{ App.el('adminRevenuePanel').style.display='none'; });
     on('exitAdminBtn','click',      ()=>App.exitAdmin());
     on('adminPwToggle',        'click', e=>App.togglePw('adminDrPassword',e.currentTarget));
     on('loginPwToggle',        'click', e=>App.togglePw('loginPassword',e.currentTarget));
     on('adminLoginPwToggle',   'click', e=>App.togglePw('adminLoginPassword',e.currentTarget));
     on('cancelAdminLoginBtn',  'click', ()=>App.hideAdminLogin());
+    // Admin tab switching
+    document.querySelectorAll('.admin-tab').forEach(btn => {
+      btn.addEventListener('click', () => App.switchAdminTab(btn.dataset.admintab));
+    });
+    // Admin users
+    on('showAdminUserFormBtn','click', ()=>App.showAdminUserForm());
+    on('hideAdminUserFormBtn','click', ()=>App.hideAdminUserForm());
+    on('adminUserCancelBtn',  'click', ()=>App.hideAdminUserForm());
+    on('adminUserSaveBtn',    'click', ()=>App.saveAdminUser());
+    App.el('adminUserTable')?.addEventListener('click', e => {
+      const btn=e.target.closest('.admin-user-del-btn');if(!btn)return;
+      App.deleteAdminUser(btn.dataset.uid);
+    });
     // T&C modal
     on('openTcBtn',   'click', ()=>{ App.el('tcModal').style.display='flex'; });
     on('closeTcBtn1', 'click', ()=>{ App.el('tcModal').style.display='none'; });
     on('closeTcBtn2', 'click', ()=>{ App.el('tcModal').style.display='none'; });
-    // Admin table edit — EVENT DELEGATION
+    // Admin doctor table edit — EVENT DELEGATION (card grid)
     App.el('adminDoctorTable')?.addEventListener('click', e => {
-      const btn=e.target.closest('.db-action-btn');if(!btn)return;
+      const btn=e.target.closest('.dr-card-edit');if(!btn)return;
       try{App.adminEditDoctor(JSON.parse(btn.dataset.drid.replace(/&quot;/g,'"')));}catch(_){}
     });
 
