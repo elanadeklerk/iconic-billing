@@ -988,16 +988,14 @@ const App = {
   adminEditDoctor(dr){
     App.el('adminEditUserId').value=dr.id||'';App.el('adminDrName').value=dr.doctor_name||'';App.el('adminDrEmail').value=dr.email||'';App.el('adminDrPassword').value='';App.el('adminSheetId').value=dr.intake_sheet_id||'';App.el('adminIntakeTab').value=dr.intake_tab_name||'Form Responses 1';App.el('adminAppsScript').value=dr.apps_script_url||'';App.el('adminGoogleKey').value='';App.el('adminAnthropicKey').value='';App.el('adminCollectionsId').value=dr.collections_sheet_id||'';
     // Notification settings
-    if(App.el('adminNotifyPhone'))    App.el('adminNotifyPhone').value      = dr.notify_phone    || '';
-    if(App.el('adminNotifyEmailAddr'))App.el('adminNotifyEmailAddr').value  = dr.notify_email    || '';
-    if(App.el('adminNotifyWhatsapp')) App.el('adminNotifyWhatsapp').checked = !!dr.notify_whatsapp_enabled;
-    if(App.el('adminNotifyEmail'))    App.el('adminNotifyEmail').checked    = !!dr.notify_email_enabled;
+    if(App.el('adminNotifyEmailAddr'))App.el('adminNotifyEmailAddr').value = dr.notify_email         || '';
+    if(App.el('adminNotifyEmail'))    App.el('adminNotifyEmail').checked   = !!dr.notify_email_enabled;
     App.setColMapDropdowns(dr.sheet_column_map||{});
     App.el('adminFormTitle').textContent='Edit — '+(dr.doctor_name||'Doctor');App.el('adminSaveBtn').textContent='Update Doctor';App.el('adminMsg').style.display='none';App.el('adminFormWrap').style.display='block';App.el('adminFormWrap').scrollIntoView({behavior:'smooth'});
   },
   clearAdminForm(){
-    ['adminEditUserId','adminDrName','adminDrEmail','adminDrPassword','adminSheetId','adminAppsScript','adminGoogleKey','adminAnthropicKey','adminCollectionsId','adminNotifyPhone','adminNotifyEmailAddr'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
-    ['adminNotifyWhatsapp','adminNotifyEmail'].forEach(id=>{const e=App.el(id);if(e)e.checked=false;});
+    ['adminEditUserId','adminDrName','adminDrEmail','adminDrPassword','adminSheetId','adminAppsScript','adminGoogleKey','adminAnthropicKey','adminCollectionsId','adminNotifyEmailAddr'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
+    const notifyEmailChk=App.el('adminNotifyEmail');if(notifyEmailChk)notifyEmailChk.checked=false;
     if(App.el('adminIntakeTab'))App.el('adminIntakeTab').value='Form Responses 1';
     if(App.el('adminSaveBtn'))App.el('adminSaveBtn').textContent='Save Doctor';
     if(App.el('adminMsg'))App.el('adminMsg').style.display='none';
@@ -1007,7 +1005,7 @@ const App = {
   async adminSave(){
     const btn=App.el('adminSaveBtn'),editId=App.el('adminEditUserId').value.trim();
     const colMap={fileNo:parseInt(App.el('colMapFileNo')?.value)||1,name:parseInt(App.el('colMapName')?.value)||2,funding:parseInt(App.el('colMapFunding')?.value)||10,medAid:parseInt(App.el('colMapMedAid')?.value)||11,plan:parseInt(App.el('colMapPlan')?.value)||12,membNo:parseInt(App.el('colMapMembNo')?.value)||13,depCode:parseInt(App.el('colMapDepCode')?.value)||14};
-    const f={doctor_name:App.el('adminDrName').value.trim(),email:App.el('adminDrEmail').value.trim(),password:App.el('adminDrPassword').value.trim(),intake_sheet_id:App.el('adminSheetId').value.trim(),intake_tab_name:App.el('adminIntakeTab').value.trim()||'Form Responses 1',apps_script_url:App.el('adminAppsScript').value.trim(),google_key:App.el('adminGoogleKey').value.trim(),anthropic_key:App.el('adminAnthropicKey').value.trim(),collections_sheet_id:App.el('adminCollectionsId').value.trim()||null,sheet_column_map:colMap,notify_phone:App.el('adminNotifyPhone')?.value.trim()||'',notify_email:App.el('adminNotifyEmailAddr')?.value.trim()||'',notify_whatsapp_enabled:App.el('adminNotifyWhatsapp')?.checked||false,notify_email_enabled:App.el('adminNotifyEmail')?.checked||false};
+    const f={doctor_name:App.el('adminDrName').value.trim(),email:App.el('adminDrEmail').value.trim(),password:App.el('adminDrPassword').value.trim(),intake_sheet_id:App.el('adminSheetId').value.trim(),intake_tab_name:App.el('adminIntakeTab').value.trim()||'Form Responses 1',apps_script_url:App.el('adminAppsScript').value.trim(),google_key:App.el('adminGoogleKey').value.trim(),anthropic_key:App.el('adminAnthropicKey').value.trim(),collections_sheet_id:App.el('adminCollectionsId').value.trim()||null,sheet_column_map:colMap,notify_email:App.el('adminNotifyEmailAddr')?.value.trim()||'',notify_email_enabled:App.el('adminNotifyEmail')?.checked||false};
     if(!f.doctor_name||!f.email||!f.intake_sheet_id||!f.collections_sheet_id||!f.apps_script_url){App.showAdminMsg('Fill in Name, Email, Intake Form ID, Collections Sheet ID and Apps Script URL.','error');return;}
     if(!editId&&(!f.google_key||!f.anthropic_key||!f.password)){App.showAdminMsg('Google key, Anthropic key and password required for new doctors.','error');return;}
     const p={...f};if(!p.google_key)delete p.google_key;if(!p.anthropic_key)delete p.anthropic_key;if(!p.password)delete p.password;
