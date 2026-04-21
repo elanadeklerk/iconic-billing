@@ -25,7 +25,7 @@ router.get('/doctors', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('doctors')
-      .select('id, doctor_name, email, intake_sheet_id, intake_tab_name, apps_script_url, collections_sheet_id, sheet_column_map, notify_phone, notify_email, notify_whatsapp_enabled, notify_email_enabled')
+      .select('id, doctor_name, email, intake_sheet_id, intake_tab_name, apps_script_url, collections_sheet_id, sheet_column_map, notify_phone, notify_email, notify_whatsapp_enabled, notify_email_enabled, is_admin')
       .order('doctor_name');
 
     if (error) {
@@ -79,6 +79,7 @@ router.post('/doctors', async (req, res) => {
       google_key:          google_key.trim(),
       anthropic_key:       anthropic_key.trim(),
       collections_sheet_id: collections_sheet_id?.trim() || null,
+      is_admin:            req.body.is_admin === true || false,
     };
 
     const { data, error } = await supabaseAdmin.from('doctors').insert([payload]).select('id').single();
@@ -102,10 +103,11 @@ router.patch('/doctors/:id', async (req, res) => {
   const allowed = ['doctor_name','email','intake_sheet_id','intake_tab_name',
                    'apps_script_url','google_key','anthropic_key','collections_sheet_id',
                    'sheet_column_map','notify_phone','notify_email',
-                   'notify_whatsapp_enabled','notify_email_enabled'];
+                   'notify_whatsapp_enabled','notify_email_enabled','is_admin'];
+  const boolFields = new Set(['notify_whatsapp_enabled','notify_email_enabled','is_admin']);
   const updates = {};
   for (const field of allowed) {
-    if (req.body[field] !== undefined && req.body[field] !== '') {
+    if (req.body[field] !== undefined && (boolFields.has(field) || req.body[field] !== '')) {
       updates[field] = field === 'email' ? req.body[field].toLowerCase().trim() : req.body[field];
     }
   }
@@ -179,6 +181,51 @@ router.delete('/doctors/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not delete: ' + err.message });
+  }
+});
+
+/**
+ * POST /api/admin/test-notify/:id
+ * Sends a test email notification for a doctor — admin only.
+ */
+router.post('/test-notify/:id', async (req, res) => {
+  try {
+    const { data: doctor, error } = await supabaseAdmin
+      .from('doctors')
+      .select('doctor_name, email, notify_email, notify_email_enabled, collections_sheet_id')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error || !doctor) return res.status(404).json({ error: 'Doctor not found.' });
+
+    console.log('[Notify Test] Doctor config:', JSON.stringify({
+      doctor_name:          doctor.doctor_name,
+      notify_email:         doctor.notify_email,
+      notify_email_enabled: doctor.notify_email_enabled,
+    }));
+    console.log('[Notify Test] RESEND_API_KEY set:', !!process.env.RESEND_API_KEY);
+    console.log('[Notify Test] RESEND_FROM_EMAIL:', process.env.RESEND_FROM_EMAIL);
+
+    if (!doctor.notify_email) return res.status(400).json({ error: 'No notification email configured for this doctor.' });
+    if (!process.env.RESEND_API_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not set in environment.' });
+    if (!process.env.RESEND_FROM_EMAIL) return res.status(500).json({ error: 'RESEND_FROM_EMAIL not set in environment.' });
+
+    const { sendBillingNotifications } = require('../services/notifications');
+    sendBillingNotifications({
+      doctor: { ...doctor, notify_email_enabled: true },
+      billing: {
+        patientName:   'Test Patient',
+        dateOfService: new Date().toISOString().split('T')[0],
+        tariff:        '0190',
+        icd10:         'Z00.0',
+        authNo:        '',
+        notes:         'This is a test notification from Iconic Billing.',
+      },
+    });
+
+    res.json({ ok: true, message: `Test email sent to ${doctor.notify_email}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

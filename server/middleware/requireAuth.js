@@ -34,11 +34,20 @@ async function requireAuth(req, res, next) {
   }
 }
 
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated.' });
-  if (req.user.email.toLowerCase() !== (process.env.ADMIN_EMAIL || '').toLowerCase())
-    return res.status(403).json({ error: 'Admin access only.' });
-  next();
+  const envAdmin = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  if (req.user.email.toLowerCase() === envAdmin) return next();
+  // Also allow doctors with is_admin = true in the database
+  try {
+    const { data } = await supabaseAdmin
+      .from('doctors')
+      .select('is_admin')
+      .eq('email', req.user.email)
+      .single();
+    if (data?.is_admin === true) return next();
+  } catch (_) {}
+  return res.status(403).json({ error: 'Admin access only.' });
 }
 
 module.exports = { requireAuth, requireAdmin };

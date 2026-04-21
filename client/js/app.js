@@ -365,6 +365,7 @@ const App = {
 
   async logout() {
     App.showConfirm('Sign Out','Are you sure you want to sign out?',async()=>{
+      if(App._patientPollTimer){clearInterval(App._patientPollTimer);App._patientPollTimer=null;}
       await API.logout();
       App.state.doctor=null;App.state.patients=[];App.state.selected=null;
       App.showLogin();
@@ -506,7 +507,25 @@ const App = {
     }
     App.setTodayDate();
     App.loadDashStats();
+    App.startPatientPoller();
     window.scrollTo(0,0);
+  },
+
+  startPatientPoller(){
+    if(App._patientPollTimer) clearInterval(App._patientPollTimer);
+    App._patientPollTimer = setInterval(async()=>{
+      try{
+        const{patients}=await API.getPatients();
+        if(!patients) return;
+        const prev=App.state.patients.length;
+        const prevIds=new Set(App.state.patients.map(p=>p.fileNo||p.name));
+        const newOnes=patients.filter(p=>!prevIds.has(p.fileNo||p.name));
+        App.state.patients=patients;
+        if(newOnes.length>0&&prev>0){
+          App.showToast(`${newOnes.length} new patient${newOnes.length>1?'s':''} added 🆕`,3000);
+        }
+      }catch(_){}
+    },60000);
   },
 
   async loadDashStats(){
@@ -526,7 +545,7 @@ const App = {
     App.state.selected=null;App.state.wardVisits=[];App.state.authNo='';App.state.lastTranscript='';App.state.calSelected.clear();
     App.el('dashboardScreen').style.display='none';
     App.el('stepsBar').style.display='flex';
-    App.resetVoice();App.resetCalendar();App.switchBillingMode('voice');
+    App.resetVoice();App.resetBillingFields();App.resetCalendar();App.switchBillingMode('voice');
     App.setTodayDate();
     App.goToScreen(1);
   },
@@ -535,7 +554,7 @@ const App = {
     App.state.wardVisits=[];App.state.authNo='';App.state.lastTranscript='';App.state.calSelected.clear();
     App.el('dashboardScreen').style.display='none';
     App.el('stepsBar').style.display='flex';
-    App.resetVoice();App.resetCalendar();App.switchBillingMode('voice');
+    App.resetVoice();App.resetBillingFields();App.resetCalendar();App.switchBillingMode('voice');
     App.setTodayDate();
     App.goToScreen(2);
   },
@@ -613,6 +632,17 @@ const App = {
     App.el('voiceFieldsWrap').style.display='none';
     App.el('voiceReviewBtn').style.display='none';
     ['voiceTariff','voiceIcd10','voiceModifier','voiceNotes'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
+  },
+
+  resetBillingFields(){
+    // Clear manual panel inputs
+    ['manualTariff','manualIcd10','manualModifier','manualNotes'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
+    // Clear voice panel inputs
+    ['voiceTariff','voiceIcd10','voiceModifier','voiceNotes'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
+    // Clear auth number in billing entry
+    const ba=App.el('billingAuthNo');if(ba)ba.value='';
+    // Clear confirm screen fields
+    ['conf-tariff','conf-icd10','conf-modifier','conf-authNo','conf-notes'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
   },
 
   toggleRecording(){ App.state.isRecording?App.stopRecording():App.startRecording(); },
@@ -990,12 +1020,14 @@ const App = {
     // Notification settings
     if(App.el('adminNotifyEmailAddr'))App.el('adminNotifyEmailAddr').value = dr.notify_email         || '';
     if(App.el('adminNotifyEmail'))    App.el('adminNotifyEmail').checked   = !!dr.notify_email_enabled;
+    if(App.el('adminIsAdmin')) App.el('adminIsAdmin').checked = !!dr.is_admin;
     App.setColMapDropdowns(dr.sheet_column_map||{});
     App.el('adminFormTitle').textContent='Edit — '+(dr.doctor_name||'Doctor');App.el('adminSaveBtn').textContent='Update Doctor';App.el('adminMsg').style.display='none';App.el('adminFormWrap').style.display='block';App.el('adminFormWrap').scrollIntoView({behavior:'smooth'});
   },
   clearAdminForm(){
     ['adminEditUserId','adminDrName','adminDrEmail','adminDrPassword','adminSheetId','adminAppsScript','adminGoogleKey','adminAnthropicKey','adminCollectionsId','adminNotifyEmailAddr'].forEach(id=>{const e=App.el(id);if(e)e.value='';});
     const notifyEmailChk=App.el('adminNotifyEmail');if(notifyEmailChk)notifyEmailChk.checked=false;
+    const isAdminChk=App.el('adminIsAdmin');if(isAdminChk)isAdminChk.checked=false;
     if(App.el('adminIntakeTab'))App.el('adminIntakeTab').value='Form Responses 1';
     if(App.el('adminSaveBtn'))App.el('adminSaveBtn').textContent='Save Doctor';
     if(App.el('adminMsg'))App.el('adminMsg').style.display='none';
@@ -1005,7 +1037,7 @@ const App = {
   async adminSave(){
     const btn=App.el('adminSaveBtn'),editId=App.el('adminEditUserId').value.trim();
     const colMap={fileNo:parseInt(App.el('colMapFileNo')?.value)||1,name:parseInt(App.el('colMapName')?.value)||2,funding:parseInt(App.el('colMapFunding')?.value)||10,medAid:parseInt(App.el('colMapMedAid')?.value)||11,plan:parseInt(App.el('colMapPlan')?.value)||12,membNo:parseInt(App.el('colMapMembNo')?.value)||13,depCode:parseInt(App.el('colMapDepCode')?.value)||14};
-    const f={doctor_name:App.el('adminDrName').value.trim(),email:App.el('adminDrEmail').value.trim(),password:App.el('adminDrPassword').value.trim(),intake_sheet_id:App.el('adminSheetId').value.trim(),intake_tab_name:App.el('adminIntakeTab').value.trim()||'Form Responses 1',apps_script_url:App.el('adminAppsScript').value.trim(),google_key:App.el('adminGoogleKey').value.trim(),anthropic_key:App.el('adminAnthropicKey').value.trim(),collections_sheet_id:App.el('adminCollectionsId').value.trim()||null,sheet_column_map:colMap,notify_email:App.el('adminNotifyEmailAddr')?.value.trim()||'',notify_email_enabled:App.el('adminNotifyEmail')?.checked||false};
+    const f={doctor_name:App.el('adminDrName').value.trim(),email:App.el('adminDrEmail').value.trim(),password:App.el('adminDrPassword').value.trim(),intake_sheet_id:App.el('adminSheetId').value.trim(),intake_tab_name:App.el('adminIntakeTab').value.trim()||'Form Responses 1',apps_script_url:App.el('adminAppsScript').value.trim(),google_key:App.el('adminGoogleKey').value.trim(),anthropic_key:App.el('adminAnthropicKey').value.trim(),collections_sheet_id:App.el('adminCollectionsId').value.trim()||null,sheet_column_map:colMap,notify_email:App.el('adminNotifyEmailAddr')?.value.trim()||'',notify_email_enabled:App.el('adminNotifyEmail')?.checked||false,is_admin:App.el('adminIsAdmin')?.checked||false};
     if(!f.doctor_name||!f.email||!f.intake_sheet_id||!f.collections_sheet_id||!f.apps_script_url){App.showAdminMsg('Fill in Name, Email, Intake Form ID, Collections Sheet ID and Apps Script URL.','error');return;}
     if(!editId&&(!f.google_key||!f.anthropic_key||!f.password)){App.showAdminMsg('Google key, Anthropic key and password required for new doctors.','error');return;}
     const p={...f};if(!p.google_key)delete p.google_key;if(!p.anthropic_key)delete p.anthropic_key;if(!p.password)delete p.password;
@@ -1089,10 +1121,25 @@ const App = {
 
     // ── Patient search (screen 1) — EVENT DELEGATION ─────
     on('searchInput', 'input', e => {
-      const q=e.target.value;const res=App.el('patientResults'),hint=App.el('searchHint');
-      if(!q||q.trim().length<2){res.style.display='none';hint.style.display='block';return;}
+      const q=e.target.value.trim();
+      const res=App.el('patientResults'),hint=App.el('searchHint');
+      if(!q){
+        // Show ALL patients when field is empty
+        hint.style.display='none';res.style.display='block';
+        App.renderPatientResults(App.state.patients,'patientResults','');
+        return;
+      }
+      if(q.length<2){res.style.display='none';hint.style.display='block';return;}
       const m=App.filterPatients(q);hint.style.display='none';res.style.display='block';
       App.renderPatientResults(m,'patientResults',q);
+    });
+    on('searchInput','focus',()=>{
+      const q=App.el('searchInput').value.trim();
+      if(!q){
+        App.el('searchHint').style.display='none';
+        App.el('patientResults').style.display='block';
+        App.renderPatientResults(App.state.patients,'patientResults','');
+      }
     });
     App.el('patientResults')?.addEventListener('click', e => {
       const item=e.target.closest('.patient-item');if(!item)return;

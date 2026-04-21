@@ -1,8 +1,8 @@
 # Iconic Flow — Project Memory
 > Medical Billing Portal · Last updated: April 2026
-> Live URL: https://iconic-billing.onrender.com
+> Live URL: **https://iconicbilling.co.za** (custom domain live)
 > Repo: https://github.com/elanadeklerk/iconic-billing (private, `main` branch)
-> Deploy: Render.com free tier (auto-deploys on push, spins down after 15min idle)
+> Deploy: Render.com (auto-deploys on push)
 
 ---
 
@@ -71,16 +71,77 @@ iconic-billing/
 ### Doctors Table Schema
 ```sql
 CREATE TABLE doctors (
-  id                   UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  created_at           TIMESTAMPTZ DEFAULT NOW(),
-  doctor_name          TEXT NOT NULL,
-  email                TEXT NOT NULL UNIQUE,
-  intake_sheet_id      TEXT,          -- Google Sheet ID (Form Responses + Billing Log)
-  intake_tab_name      TEXT DEFAULT 'Form Responses 1',
-  apps_script_url      TEXT,          -- deployed Apps Script web app URL
-  google_key           TEXT,          -- Google Sheets API key (server-side only)
-  anthropic_key        TEXT,          -- per-doctor Anthropic key (fallback to server env)
-  collections_sheet_id TEXT           -- optional separate collections sheet
+  id                       UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at               TIMESTAMPTZ DEFAULT NOW(),
+  doctor_name              TEXT NOT NULL,
+  email                    TEXT NOT NULL UNIQUE,
+  intake_sheet_id          TEXT,
+  intake_tab_name          TEXT DEFAULT 'Form Responses 1',
+  apps_script_url          TEXT,
+  google_key               TEXT,
+  anthropic_key            TEXT,
+  collections_sheet_id     TEXT,
+  sheet_column_map         JSONB,         -- maps field names to column indices
+  notify_email             TEXT,          -- digest notification recipient
+  notify_email_enabled     BOOLEAN DEFAULT false,
+  notify_phone             TEXT,          -- future WhatsApp use
+  notify_whatsapp_enabled  BOOLEAN DEFAULT false,
+  is_admin                 BOOLEAN DEFAULT false  -- grants admin panel access
+);
+```
+
+### Additional Tables (must be created in Supabase)
+```sql
+-- 2-hour billing digest queue
+CREATE TABLE IF NOT EXISTS notification_queue (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  doctor_email    TEXT NOT NULL,
+  doctor_name     TEXT,
+  notify_email    TEXT NOT NULL,
+  sheet_url       TEXT,
+  patient_name    TEXT,
+  date_of_service TEXT,
+  tariff          TEXT,
+  icd10           TEXT,
+  auth_no         TEXT,
+  notes           TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Mirror of every billing submission
+CREATE TABLE IF NOT EXISTS billing_records (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  doctor_email    TEXT NOT NULL,
+  file_no         TEXT,
+  patient_name    TEXT,
+  date_of_service TEXT,
+  funding_type    TEXT,
+  med_aid         TEXT,
+  memb_no         TEXT,
+  tariff          TEXT,
+  icd10           TEXT,
+  modifier        TEXT,
+  auth_no         TEXT,
+  notes           TEXT,
+  transcript      TEXT,   -- voice recording transcript (max 5000 chars)
+  ward_visits     TEXT,   -- JSON array of ward visit objects
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Hospital sticker scans history
+CREATE TABLE IF NOT EXISTS sticker_scans (
+  id           UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  doctor_email TEXT NOT NULL,
+  file_no      TEXT,
+  patient_name TEXT,
+  med_aid      TEXT,
+  plan         TEXT,
+  memb_no      TEXT,
+  dep_code     TEXT,
+  id_no        TEXT,
+  cell_no      TEXT,
+  auth_no      TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
@@ -101,9 +162,13 @@ PORT=3000
 SUPABASE_URL=https://ggdjrtbphjboxbuzyvjt.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_...
 SUPABASE_SERVICE_ROLE_KEY=[secret]
+SUPABASE_JWT_SECRET=[secret]
 ADMIN_EMAIL=deklerkdeclan@gmail.com
-ANTHROPIC_API_KEY=sk-ant-...         ← shared key for all doctors
-ALLOWED_ORIGIN=https://iconic-billing.onrender.com
+ANTHROPIC_API_KEY=sk-ant-...              ← shared key for all doctors
+GOOGLE_SERVICE_ACCOUNT_JSON={...}         ← full service account JSON as one line
+ALLOWED_ORIGIN=https://iconicbilling.co.za
+RESEND_API_KEY=re_...                     ← Resend email API key
+RESEND_FROM_EMAIL=notifications@iconicbilling.co.za
 ```
 
 ---
@@ -140,6 +205,8 @@ ALLOWED_ORIGIN=https://iconic-billing.onrender.com
 | POST | `/doctors` | Create doctor + Supabase Auth user |
 | PATCH | `/doctors/:id` | Update doctor config |
 | DELETE | `/doctors/:id` | Remove doctor |
+| GET | `/doctors/:id/sheet-headers` | Returns row 1 of intake sheet for column mapping |
+| POST | `/test-notify/:id` | Sends immediate test email (bypasses digest queue) |
 
 ---
 
@@ -243,9 +310,11 @@ stopRecording()
 Doctor taps 📷 → camera opens → photo taken
 → Canvas resize to max 1200px (phone cameras are 12MP+, would exceed API limits)
 → POST /api/billing/scan-sticker with base64 JPEG
-→ Claude Vision reads: fileNo, name, medAid, plan, membNo, depCode, idNo, cellNo
-→ All fields shown as editable inputs
+→ Claude Vision reads: fileNo, name, medAid, plan, membNo, depCode, idNo, cellNo, authNo
+→ All fields shown as editable inputs (including Authorization Number)
 → "Use Patient → Start Billing" → merges sticker data with sheet data if match found
+→ Auth number pre-fills billing entry auth field automatically
+→ Sticker data saved to sticker_scans Supabase table
 ```
 
 ### Ward Visits
@@ -333,7 +402,50 @@ Start command: `node server/index.js`
 
 ---
 
-## 13. Immediate Next Steps
+## 13. Features Added (this session)
+
+### Authorization Number
+- Added to sticker scanner modal (AI extracts from sticker if present)
+- Added to billing entry screen (always-visible field, below voice/manual panels)
+- Added to confirm screen (editable before submit)
+- Prepended to notes column in Google Sheet: `Auth: A123 | ...`
+- Saved to `billing_records` and `sticker_scans` tables
+
+### Supabase Saving
+- Every billing submission → saved to `billing_records` (with transcript, ward visits, auth no)
+- Every confirmed sticker scan → saved to `sticker_scans`
+- `POST /api/billing/save-sticker` endpoint
+
+### Email Notifications (Resend)
+- Per-doctor configurable in admin panel (email address + enable toggle)
+- **Digest model**: entries queued in `notification_queue` Supabase table on each submit
+- `startDigestScheduler()` fires every 2 hours, sends one digest email per doctor
+- If queue empty → nothing sent
+- Dark-themed HTML email with patient table and Google Sheet button
+- Domain `iconicbilling.co.za` verified in Resend
+
+### Admin Panel Enhancements
+- **Multiple admins**: `is_admin` boolean on doctors table. `requireAdmin` checks env var first, then DB
+- **Admin access toggle**: checkbox in doctor edit form
+- **Notification settings section**: email address + enable toggle per doctor
+- **Test notify endpoint**: `POST /api/admin/test-notify/:id`
+
+### Login Screen
+- **Neural network canvas** animation behind login form (nodes + glowing connections)
+- Starts on `showLogin()`, stops on successful login, uses `ResizeObserver`
+- **Easter eggs updated**: Declan (green Matrix mode) and Elana (pink/gold mode) with personalised messages and themed confetti
+
+### Billing Flow Improvements
+- `resetBillingFields()` clears all code fields after each submission (voice, manual, auth, confirm)
+- Patient search shows ALL patients on focus/empty, filters as doctor types
+- Patient auto-refresh every 60 seconds via `startPatientPoller()` — toast on new patient detected
+
+### T&C
+- Larger font (14px) and better line height (1.85) for mobile readability
+
+---
+
+## 14. Immediate Next Steps
 
 ### Priority 1 — Critical (must do before doctors use it)
 - [ ] **Update Dr Hlahla's Apps Script** — copy from `README_APPS_SCRIPT.md`, redeploy. This fixes leading zeros (0190→190) and modifier (0009→9) issues

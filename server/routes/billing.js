@@ -14,7 +14,7 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/requireAuth');
 const { getSheetsAuthHeader } = require('../utils/googleAuth');
-const { sendBillingNotifications } = require('../services/notifications');
+const { queueBillingNotification } = require('../services/notifications');
 const router = express.Router();
 
 const supabaseAdmin = createClient(
@@ -275,8 +275,8 @@ router.post('/submit', requireAuth, async (req, res) => {
     });
     if (!mainRes.ok) return res.status(502).json({ error: 'Billing submission failed. Please try again.' });
 
-    // Fire WhatsApp + email notifications (non-blocking)
-    sendBillingNotifications({
+    // Queue entry for 2-hour digest email (non-blocking)
+    queueBillingNotification({
       doctor,
       billing: {
         patientName:   req.body.patientName,
@@ -286,7 +286,7 @@ router.post('/submit', requireAuth, async (req, res) => {
         authNo,
         notes:         notesField,
       },
-    });
+    }).catch(e => console.error('[Notify] Queue error:', e.message));
 
     // Save billing record to Supabase (non-blocking)
     supabaseAdmin.from('billing_records').insert({

@@ -10,6 +10,7 @@ const authRoutes    = require('./routes/auth');
 const patientRoutes = require('./routes/patients');
 const billingRoutes = require('./routes/billing');
 const adminRoutes   = require('./routes/admin');
+const { startDigestScheduler } = require('./services/notifications');
 
 const app  = express();
 app.set('trust proxy', 1); // Required for Render — sits behind a reverse proxy
@@ -82,4 +83,6 @@ app.listen(PORT, () => {
   console.log(`   ADMIN_EMAIL: ${process.env.ADMIN_EMAIL || '(not set)'}`);
   console.log(`   SUPABASE:    ${process.env.SUPABASE_URL ? 'configured ✅' : '⚠ MISSING'}`);
   console.log(`   ANTHROPIC:   ${process.env.ANTHROPIC_API_KEY ? 'configured ✅' : '(per-doctor key)'}\n`);
+  // Start 2-hour billing digest email scheduler
+  startDigestScheduler();
 });

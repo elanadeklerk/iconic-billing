@@ -60,11 +60,23 @@ router.post('/admin-login', async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password)
     return res.status(400).json({ error: 'Email and password required.' });
+  const cleanEmail = email.toLowerCase().trim();
   const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
-  if (email.toLowerCase().trim() !== adminEmail)
-    return res.status(403).json({ error: 'Access denied.' });
+  // Allow if email matches env var OR doctor has is_admin = true in the database
+  let isAllowed = cleanEmail === adminEmail;
+  if (!isAllowed) {
+    try {
+      const { data } = await supabaseAdmin
+        .from('doctors')
+        .select('is_admin')
+        .ilike('email', cleanEmail)
+        .single();
+      if (data?.is_admin === true) isAllowed = true;
+    } catch (_) {}
+  }
+  if (!isAllowed) return res.status(403).json({ error: 'Access denied.' });
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     if (error) return res.status(401).json({ error: error.message });
     res.cookie('ib_session', data.session.access_token, COOKIE_OPTS);
     res.json({ ok: true, isAdmin: true });
