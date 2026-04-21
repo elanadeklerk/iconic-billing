@@ -238,6 +238,7 @@ router.post('/submit', requireAuth, async (req, res) => {
     }
 
     // Build ward visits summary for the notes field (single row, no looping)
+    const authNo = (req.body.authNo || '').trim();
     let notesField = req.body.notes || '';
     if (wardVisits.length > 0) {
       const wardDates  = wardVisits.map(v => v.date).join(', ');
@@ -245,6 +246,11 @@ router.post('/submit', requireAuth, async (req, res) => {
       const wardIcd10  = wardVisits[0].icd10;
       const wardSummary = `Ward visits: ${wardDates} | Tariff: ${wardTariff} | ICD-10: ${wardIcd10}`;
       notesField = notesField ? `${notesField} | ${wardSummary}` : wardSummary;
+    }
+
+    // Prepend auth number to notes if provided
+    if (authNo) {
+      notesField = notesField ? `Auth: ${authNo} | ${notesField}` : `Auth: ${authNo}`;
     }
 
     // Single row — ward visit dates + codes go into the notes column
