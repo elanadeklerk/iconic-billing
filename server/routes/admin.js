@@ -25,7 +25,7 @@ router.get('/doctors', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('doctors')
-      .select('id, doctor_name, email, intake_sheet_id, intake_tab_name, apps_script_url, collections_sheet_id, sheet_column_map')
+      .select('id, doctor_name, email, intake_sheet_id, intake_tab_name, apps_script_url, collections_sheet_id, sheet_column_map, notify_phone, notify_email, notify_whatsapp_enabled, notify_email_enabled')
       .order('doctor_name');
 
     if (error) {
@@ -101,7 +101,8 @@ router.post('/doctors', async (req, res) => {
 router.patch('/doctors/:id', async (req, res) => {
   const allowed = ['doctor_name','email','intake_sheet_id','intake_tab_name',
                    'apps_script_url','google_key','anthropic_key','collections_sheet_id',
-                   'sheet_column_map'];
+                   'sheet_column_map','notify_phone','notify_email',
+                   'notify_whatsapp_enabled','notify_email_enabled'];
   const updates = {};
   for (const field of allowed) {
     if (req.body[field] !== undefined && req.body[field] !== '') {

@@ -14,6 +14,7 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/requireAuth');
 const { getSheetsAuthHeader } = require('../utils/googleAuth');
+const { sendBillingNotifications } = require('../services/notifications');
 const router = express.Router();
 
 const supabaseAdmin = createClient(
@@ -24,7 +25,7 @@ const supabaseAdmin = createClient(
 async function getDoctorConfig(email) {
   const { data, error } = await supabaseAdmin
     .from('doctors')
-    .select('doctor_name, apps_script_url, anthropic_key, intake_sheet_id, collections_sheet_id')
+    .select('doctor_name, apps_script_url, anthropic_key, intake_sheet_id, collections_sheet_id, notify_phone, notify_email, notify_whatsapp_enabled, notify_email_enabled')
     .eq('email', email)
     .single();
   if (error || !data) throw new Error('Doctor config not found.');
@@ -267,6 +268,37 @@ router.post('/submit', requireAuth, async (req, res) => {
       body:    JSON.stringify(payload),
     });
     if (!mainRes.ok) return res.status(502).json({ error: 'Billing submission failed. Please try again.' });
+
+    // Fire WhatsApp + email notifications (non-blocking)
+    sendBillingNotifications({
+      doctor,
+      billing: {
+        patientName:   req.body.patientName,
+        dateOfService: req.body.dateOfService,
+        tariff:        String(req.body.tariff || '').trim(),
+        icd10:         String(req.body.icd10  || '').trim(),
+        authNo,
+        notes:         notesField,
+      },
+    });
+
+    // Save billing record to Supabase (non-blocking)
+    supabaseAdmin.from('billing_records').insert({
+      doctor_email:    req.user.email,
+      file_no:         req.body.fileNo,
+      patient_name:    req.body.patientName,
+      date_of_service: req.body.dateOfService,
+      funding_type:    req.body.fundingType   || '',
+      med_aid:         req.body.medAid        || '',
+      memb_no:         req.body.membNo        || '',
+      tariff:          String(req.body.tariff  || '').trim(),
+      icd10:           String(req.body.icd10   || '').trim(),
+      modifier:        String(req.body.modifier || '').trim(),
+      auth_no:         authNo,
+      notes:           notesField,
+      transcript:      (req.body.transcript || '').slice(0, 5000),
+      ward_visits:     wardVisits.length > 0 ? JSON.stringify(wardVisits) : null,
+    }).then().catch(e => console.error('Supabase billing_records save error:', e.message));
 
     res.json({
       ok:       true,
