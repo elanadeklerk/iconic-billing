@@ -55,19 +55,27 @@ router.post('/extract', requireAuth, async (req, res) => {
         max_tokens: 800,
         messages: [{
           role: 'user',
-          content: `You are a South African medical billing assistant. Extract billing codes from the doctor's dictation below.
+          content: `You are a South African medical billing assistant. Extract SAMA tariff and ICD-10 codes from the doctor's dictation.
 
 Return ONLY valid JSON, no markdown, no explanation:
 {"tariff":"","icd10":"","modifier":"","notes":""}
 
-RULES:
-- tariff: SAMA tariff codes — numbers only, comma-separated if multiple (e.g. "0190,0191"). Preserve leading zeros exactly as spoken (e.g. "0190" not "190").
-- icd10: ICD-10 codes — ALWAYS uppercase letter+digits format (e.g. "J06.9", "M54.5"). Comma-separated if multiple. Map diagnosis names to their correct ICD-10 code.
-- modifier: Modifier codes if explicitly mentioned. Empty string if none.
-- notes: Brief clinical context not captured in codes.
-- ONLY extract codes explicitly stated or clearly named by the doctor. Do NOT infer, assume, or add extra codes based on clinical context.
-- If the doctor says a specific code number, use it exactly as spoken.
-- Return ONLY the JSON object, nothing else.
+TARIFF CODE RULES:
+- SAMA codes are always 4 digits with leading zeros: "0190" not "190", "0028" not "28"
+- Doctors speak codes as digits: "zero one nine zero" = 0190, "oh one nine oh" = 0190, "one ninety" = 0190
+- Common SA SAMA codes: 0190=GP consult, 0191=extended consult, 0192=after hours, 0193=home visit, 0028=ward visit, 0136=procedure, 0197=telephonic, 0009=modifier
+- Multiple codes: comma-separated, e.g. "0190,0028"
+- ALWAYS output as 4-digit zero-padded strings
+
+ICD-10 CODE RULES:
+- Always uppercase letter followed by digits and optional dot: "J06.9", "M54.5", "I10", "Z23"
+- If the doctor says a diagnosis name, map it: "upper respiratory" = J06.9, "hypertension" = I10, "back pain" = M54.5, "diabetes" = E11.9, "UTI" = N39.0, "asthma" = J45.909, "chest pain" = R07.9, "headache" = R51, "fever" = R50.9, "anxiety" = F41.1, "depression" = F32.9
+- Multiple codes: comma-separated
+
+OTHER RULES:
+- modifier: SAMA modifier code if explicitly mentioned (e.g. "0009"). Empty if none.
+- notes: brief clinical context not captured in codes (keep short)
+- ONLY extract what the doctor explicitly states — do NOT infer extra codes
 
 Transcript: "${transcript.replace(/"/g, '\\"')}"`
         }]
