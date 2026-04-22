@@ -64,6 +64,7 @@ const App = {
     wardVisits:     [],
     authNo:         '',
     lastTranscript: '',
+    _lastFinal:     '',
     calSelected:    new Set(),
     calYear:        new Date().getFullYear(),
     calMonth:       new Date().getMonth(),
@@ -666,12 +667,8 @@ const App = {
     App.el('voiceReviewBtn').style.display='none';
     box.classList.remove('empty'); box.textContent = '';
 
-    // accumulatedFinal persists across recognition restarts (handles silence timeouts).
-    // We only ever ADD new finals to it using e.resultIndex — never re-read old ones.
-    // This lets onend restart freely without duplicating text.
     App.state._accFinal = '';
-    App.state._transcript = '';
-    App.state._accFinal = '';
+    App.state._lastFinal = ''; // tracks last added final to block exact duplicates on restart
 
     const startRec = () => {
       const rec = new SR();
@@ -683,26 +680,32 @@ const App = {
           if (e.results[i].isFinal) newFinals += e.results[i][0].transcript;
           else                       interim   += e.results[i][0].transcript;
         }
-        if (newFinals) App.state._accFinal += newFinals;
+        if (newFinals) {
+          const t = newFinals.trim();
+          // Block exact repeat — happens when new session re-processes buffered audio
+          if (t && t !== App.state._lastFinal) {
+            App.state._accFinal += (App.state._accFinal ? ' ' : '') + t;
+            App.state._lastFinal = t;
+          }
+        }
         const display = (App.state._accFinal + (interim ? ' ' + interim : '')).trim();
         box.textContent = display || '...';
       };
 
-      // Instant visual feedback: pulse the button the moment sound is detected,
-      // before any words have been transcribed (bridges the ~500ms API latency).
       rec.onsoundstart = () => { App.el('recordBtn')?.classList.add('listening'); };
       rec.onspeechend  = () => { App.el('recordBtn')?.classList.remove('listening'); };
 
       rec.onend = () => {
         App.el('recordBtn')?.classList.remove('listening');
         if (App.state.isRecording) {
-          // Silence timeout — restart to keep listening
-          startRec();
+          // Wait 200ms before restarting — gives audio hardware time to clear its
+          // buffer so the new session doesn't re-transcribe the last few seconds
+          setTimeout(startRec, 200);
         } else {
-          // Doctor tapped STOP — all audio is now fully processed, extract here
           App.state._recognition = null;
           const text = (App.state._accFinal || '').trim();
           App.state._accFinal = '';
+          App.state._lastFinal = '';
           if (text) App.extractFromText(text);
         }
       };
