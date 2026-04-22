@@ -1,20 +1,26 @@
-# Updated Apps Script for Iconic Billing Portal
+# Apps Script for Iconic Billing Portal
 
-## How to update Dr Hlahla's sheet
+## How to update each doctor's sheet
 
-1. Open the Google Sheet
-2. Extensions → Apps Script
-3. Replace ALL the code with the code below
-4. Click Deploy → Manage Deployments → select your existing deployment → Edit → Version: New version → Deploy
-5. Copy the new URL and update it in the Admin Panel if it changed
+1. Open the doctor's Google Sheet
+2. `Extensions` → `Apps Script`
+3. Select all (`Ctrl+A`), delete, paste the full code block below
+4. Change **line 2** to the doctor's name: `const DOCTOR_NAME = "Dr X";`
+5. Check **line 3** matches the exact submissions tab name in that sheet
+6. `Ctrl+S` → `Deploy` → `Manage deployments` → Edit → Version: **New version** → Deploy
+7. Copy the new URL and update it in the Admin Panel if it changed
+
+> **One script for all doctors.** Only `DOCTOR_NAME` and `SUBMISSIONS` differ per sheet.
 
 ---
 
 ```javascript
-// ─── CONFIG ───────────────────────────────────────────────
-const RESPONSES_SHEET = "Form Responses 1";
-const BILLING_LOG     = "Billing Log";
-const COLLECTIONS     = "Collections Summary";
+// ─── CONFIG — change these for each doctor ────────────────
+const DOCTOR_NAME    = "Dr N Moosa";          // Used in summary headings
+const SUBMISSIONS    = "Form responses 1"; // Tab where app writes billing entries
+const BILLING_LOG    = "Billing Log";         // Auto-generated — do not rename
+const COLLECTIONS    = "Collections Summary"; // Auto-generated — do not rename
+const STICKER_SCANS  = "Sticker Scans";       // Auto-generated — do not rename
 // ──────────────────────────────────────────────────────────
 
 const STATUSES = [
@@ -42,7 +48,8 @@ function refreshAll() {
 // ─── Refresh Billing Log ───────────────────────────────────
 function refreshBillingLog() {
   const ss        = SpreadsheetApp.getActiveSpreadsheet();
-  const respSheet = ss.getSheetByName(RESPONSES_SHEET);
+  const respSheet = ss.getSheetByName(SUBMISSIONS);
+  if (!respSheet || respSheet.getLastRow() < 2) return;
 
   let logSheet = ss.getSheetByName(BILLING_LOG);
   if (!logSheet) logSheet = ss.insertSheet(BILLING_LOG);
@@ -130,7 +137,7 @@ function refreshBillingLog() {
   });
   logSheet.setConditionalFormatRules(rules);
 
-  [90,180,120,160,120,150,120,120,120,100,120,120,120,120,160,200]
+  [90, 180, 120, 160, 120, 150, 120, 120, 120, 100, 120, 120, 120, 120, 160, 200]
     .forEach(function(w, i) { logSheet.setColumnWidth(i + 1, w); });
 
   logSheet.setFrozenRows(1);
@@ -180,7 +187,7 @@ function refreshCollections() {
       else                     buckets.d120    += outstanding;
     }
 
-    if (!fundTotals[fundType]) fundTotals[fundType] = { billed:0, paid:0, outstanding:0 };
+    if (!fundTotals[fundType]) fundTotals[fundType] = { billed: 0, paid: 0, outstanding: 0 };
     fundTotals[fundType].billed      += billed;
     fundTotals[fundType].paid        += paid;
     fundTotals[fundType].outstanding += outstanding;
@@ -192,23 +199,21 @@ function refreshCollections() {
   var ZAR = function(val) { return "R " + val.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","); };
   var r = 1;
 
-  var drName = ss.getName().split(" - ")[0] || "Doctor";
-
-  colSheet.getRange(r,1,1,4).merge()
-    .setValue(drName + " - COLLECTIONS & AGEING SUMMARY")
+  colSheet.getRange(r, 1, 1, 4).merge()
+    .setValue(DOCTOR_NAME + " — COLLECTIONS & AGEING SUMMARY")
     .setFontWeight("bold").setFontSize(14)
     .setBackground("#1a73e8").setFontColor("#ffffff")
     .setHorizontalAlignment("center");
   r++;
 
-  colSheet.getRange(r,1,1,4).merge()
+  colSheet.getRange(r, 1, 1, 4).merge()
     .setValue("Last updated: " + today.toLocaleString())
     .setFontStyle("italic").setFontColor("#80868b")
     .setHorizontalAlignment("center");
   r += 2;
 
   var section = function(title) {
-    colSheet.getRange(r,1,1,4).merge()
+    colSheet.getRange(r, 1, 1, 4).merge()
       .setValue(title).setFontWeight("bold")
       .setBackground("#e8f0fe");
     r++;
@@ -221,15 +226,15 @@ function refreshCollections() {
     ["Total Outstanding", ZAR(totalOutstanding)],
     ["Total Claims",      logData.length]
   ].forEach(function(item) {
-    colSheet.getRange(r,1).setValue(item[0]).setFontWeight("bold");
-    colSheet.getRange(r,2).setValue(item[1]);
+    colSheet.getRange(r, 1).setValue(item[0]).setFontWeight("bold");
+    colSheet.getRange(r, 2).setValue(item[1]);
     r++;
   });
   r++;
 
   section("AGEING ANALYSIS");
-  colSheet.getRange(r,1).setValue("Bucket").setFontWeight("bold");
-  colSheet.getRange(r,2).setValue("Outstanding").setFontWeight("bold");
+  colSheet.getRange(r, 1).setValue("Bucket").setFontWeight("bold");
+  colSheet.getRange(r, 2).setValue("Outstanding").setFontWeight("bold");
   r++;
 
   [
@@ -239,68 +244,63 @@ function refreshCollections() {
     ["90-120 days",         buckets.d90,     "#fce8e6"],
     ["120+ days",           buckets.d120,    "#f4c7c3"],
   ].forEach(function(item) {
-    colSheet.getRange(r,1).setValue(item[0]);
-    colSheet.getRange(r,2).setValue(ZAR(item[1])).setBackground(item[2]);
+    colSheet.getRange(r, 1).setValue(item[0]);
+    colSheet.getRange(r, 2).setValue(ZAR(item[1])).setBackground(item[2]);
     r++;
   });
   r++;
 
   section("BY FUNDING TYPE");
-  colSheet.getRange(r,1).setValue("Funding Type").setFontWeight("bold");
-  colSheet.getRange(r,2).setValue("Billed").setFontWeight("bold");
-  colSheet.getRange(r,3).setValue("Paid").setFontWeight("bold");
-  colSheet.getRange(r,4).setValue("Outstanding").setFontWeight("bold");
+  colSheet.getRange(r, 1).setValue("Funding Type").setFontWeight("bold");
+  colSheet.getRange(r, 2).setValue("Billed").setFontWeight("bold");
+  colSheet.getRange(r, 3).setValue("Paid").setFontWeight("bold");
+  colSheet.getRange(r, 4).setValue("Outstanding").setFontWeight("bold");
   r++;
 
   Object.entries(fundTotals).forEach(function(entry) {
-    colSheet.getRange(r,1).setValue(entry[0]);
-    colSheet.getRange(r,2).setValue(ZAR(entry[1].billed));
-    colSheet.getRange(r,3).setValue(ZAR(entry[1].paid));
-    colSheet.getRange(r,4).setValue(ZAR(entry[1].outstanding));
+    colSheet.getRange(r, 1).setValue(entry[0]);
+    colSheet.getRange(r, 2).setValue(ZAR(entry[1].billed));
+    colSheet.getRange(r, 3).setValue(ZAR(entry[1].paid));
+    colSheet.getRange(r, 4).setValue(ZAR(entry[1].outstanding));
     r++;
   });
   r++;
 
   section("BY CLAIM STATUS");
-  colSheet.getRange(r,1).setValue("Status").setFontWeight("bold");
-  colSheet.getRange(r,2).setValue("Outstanding").setFontWeight("bold");
+  colSheet.getRange(r, 1).setValue("Status").setFontWeight("bold");
+  colSheet.getRange(r, 2).setValue("Outstanding").setFontWeight("bold");
   r++;
 
   Object.entries(statusTotals).forEach(function(entry) {
-    colSheet.getRange(r,1).setValue(entry[0]);
-    colSheet.getRange(r,2).setValue(ZAR(entry[1]));
+    colSheet.getRange(r, 1).setValue(entry[0]);
+    colSheet.getRange(r, 2).setValue(ZAR(entry[1]));
     r++;
   });
 
-  [220,160,160,160].forEach(function(w, i) { colSheet.setColumnWidth(i+1, w); });
+  [220, 160, 160, 160].forEach(function(w, i) { colSheet.setColumnWidth(i + 1, w); });
 }
 
-// ─── doPost — receives billing entries from the app ────────
-// Accepts EITHER a single entry OR an array in { rows: [...] }
-// Ward visits come as separate rows in the same call
+// ─── doPost — receives billing entries OR sticker scans ────
+// Accepts EITHER a single billing entry OR { type: 'sticker', ... }
 function doPost(e) {
   try {
-    const data  = JSON.parse(e.postData.contents);
-    const ss    = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(RESPONSES_SHEET);
+    const data = JSON.parse(e.postData.contents);
 
-    var rowsToAdd = [];
+    // Route sticker scans to their own handler
+    if (data.type === 'sticker') return doStickerRow(data);
 
-    if (data.rows && Array.isArray(data.rows)) {
-      // New format: array of rows (main billing + ward visits)
-      rowsToAdd = data.rows;
-    } else {
-      // Legacy single-row format
-      rowsToAdd = [data];
-    }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // Auto-create the submissions tab if it doesn't exist yet
+    let sheet = ss.getSheetByName(SUBMISSIONS);
+    if (!sheet) sheet = ss.insertSheet(SUBMISSIONS);
+
+    var rowsToAdd = Array.isArray(data.rows) ? data.rows : [data];
 
     rowsToAdd.forEach(function(row) {
       var nextRow = sheet.getLastRow() + 1;
-      // Format tariff, icd10, modifier columns as plain TEXT before writing.
-      // IMPORTANT: we use setValues (not appendRow) so the data lands in the
-      // same range that was just formatted — appendRow adds a new row and can
-      // bypass the pre-set format, causing leading zeros to be stripped and
-      // comma-separated codes to be mis-parsed as large numbers.
+      // Pre-format tariff, icd10, modifier columns as TEXT before writing
+      // MUST use setValues (not appendRow) so the format applies to the same row
       sheet.getRange(nextRow, 8, 1, 3).setNumberFormat('@STRING@');
       sheet.getRange(nextRow, 1, 1, 11).setValues([[
         row.timestamp     || new Date().toISOString(),
@@ -332,6 +332,69 @@ function doPost(e) {
   }
 }
 
+// ─── doStickerRow — writes one sticker scan to Sticker Scans tab ───
+function doStickerRow(data) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(STICKER_SCANS);
+
+    // Create the tab with headers if it doesn't exist yet
+    if (!sheet) {
+      sheet = ss.insertSheet(STICKER_SCANS);
+      const headers = [
+        'Timestamp', 'File No', 'Patient Name',
+        'Medical Aid', 'Plan', 'Membership No',
+        'Auth No', 'Doctor', 'Photo'
+      ];
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+        .setFontWeight('bold')
+        .setBackground('#1a73e8')
+        .setFontColor('#ffffff');
+      sheet.setFrozenRows(1);
+      [160, 100, 180, 160, 140, 140, 100, 140, 200]
+        .forEach(function(w, i) { sheet.setColumnWidth(i + 1, w); });
+    }
+
+    var nextRow = sheet.getLastRow() + 1;
+
+    // Write all text fields first
+    sheet.getRange(nextRow, 1, 1, 8).setValues([[
+      data.timestamp  || new Date().toISOString(),
+      data.fileNo     || '',
+      data.name       || '',
+      data.medAid     || '',
+      data.plan       || '',
+      data.membNo     || '',
+      data.authNo     || '',
+      data.doctorName || ''
+    ]]);
+
+    // Embed the sticker photo directly in column 9
+    if (data.imageBase64) {
+      try {
+        const blob = Utilities.newBlob(
+          Utilities.base64Decode(data.imageBase64),
+          'image/jpeg',
+          'sticker.jpg'
+        );
+        sheet.setRowHeight(nextRow, 130);
+        sheet.insertImage(blob, 9, nextRow);
+      } catch(imgErr) {
+        sheet.getRange(nextRow, 9).setValue('[photo unavailable]');
+      }
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 // ─── doGet — returns recent billings for the app dashboard ─
 function doGet(e) {
   if (e.parameter.mode !== 'fetch') {
@@ -351,26 +414,24 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var rows   = sheet.getDataRange().getValues();
-    var header = rows[0];
+    var rows = sheet.getDataRange().getValues();
 
     // Return recent billings (newest first), exclude ward visit rows
     var data = rows.slice(1)
       .filter(function(row) {
-        // Include main billing rows — ward visits have "Ward visit" in notes (col 15)
         return (row[15] || '').toString() !== 'Ward visit';
       })
       .reverse()
       .slice(0, limit)
       .map(function(row) {
         return {
-          fileNo:        row[0] || '',
-          patientName:   row[1] || '',
-          fundingType:   row[2] || '',
-          medAid:        row[3] || '',
-          dateOfService: row[6] || '',
-          tariff:        row[7] || '',
-          icd10:         row[8] || '',
+          fileNo:        row[0]  || '',
+          patientName:   row[1]  || '',
+          fundingType:   row[2]  || '',
+          medAid:        row[3]  || '',
+          dateOfService: row[6]  || '',
+          tariff:        row[7]  || '',
+          icd10:         row[8]  || '',
           amountBilled:  row[10] || '',
           amountPaid:    row[11] || '',
           outstanding:   row[12] || '',

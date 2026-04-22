@@ -602,6 +602,7 @@ const App = {
     App.el('conf-icd10').value=icd10||'';
     App.el('conf-modifier').value=modifier||'';
     if(App.el('conf-notes')&&notes) App.el('conf-notes').value=notes;
+    if(App.el('conf-authNo')) App.el('conf-authNo').value=App.el('billingAuthNo')?.value.trim()||'';
     App.renderWardSummary();
     App.goToScreen(3);
   },
@@ -611,11 +612,12 @@ const App = {
     if(!p){alert('No patient selected.');return;}
     const tariff=App.el('conf-tariff').value.trim(),icd10=App.el('conf-icd10').value.trim();
     const modifier=App.el('conf-modifier')?.value.trim()||'',notes=App.el('conf-notes')?.value.trim()||'';
+    const authNo=App.el('conf-authNo')?.value.trim()||'';
     const dos=App.el('conf-dos')?.textContent.trim()||'';
     if(!tariff||!icd10){alert('Please enter Tariff and ICD-10 codes.');return;}
     const btn=App.el('submitBtn');btn.disabled=true;btn.textContent='Submitting…';
     try{
-      const r=await API.submitBilling({fileNo:p.fileNo,patientName:p.name,dateOfService:dos,fundingType:p.funding||'',medAid:p.medAid||'',membNo:p.membNo||'',tariff,icd10,modifier,notes,wardVisits:App.state.wardVisits.length?JSON.stringify(App.state.wardVisits):''});
+      const r=await API.submitBilling({fileNo:p.fileNo,patientName:p.name,dateOfService:dos,fundingType:p.funding||'',medAid:p.medAid||'',membNo:p.membNo||'',tariff,icd10,modifier,authNo,notes,wardVisits:App.state.wardVisits.length?JSON.stringify(App.state.wardVisits):''});
       btn.textContent='✓ Done!';btn.style.background='linear-gradient(135deg,#00e5a0,#00c2ff)';
       App.el('successMsg').textContent=`Billing submitted for ${p.name}${r.rowCount>1?' ('+r.rowCount+' rows)':''}`;
       setTimeout(()=>{App.goToScreen(4);App.state.wardVisits=[];btn.style.background='';},400);
@@ -886,6 +888,7 @@ const App = {
       App.el('stickerScanning').style.display='none';
       if(!result.name&&!result.fileNo){App.el('stickerError').textContent='Could not read details. Try a clearer photo.';App.el('stickerError').style.display='block';return;}
       ['fileNo','name','medAid','plan','membNo','depCode','idNo','cellNo'].forEach(k=>{const e=App.el('sticker'+k.charAt(0).toUpperCase()+k.slice(1));if(e)e.value=result[k]||'';});
+      App.state.authNo=result.authNo||'';
       App.el('stickerResults').style.display='block';
     }catch(e){App.el('stickerScanning').style.display='none';App.el('stickerError').textContent='Scan failed: '+e.message;App.el('stickerError').style.display='block';}
   },
@@ -903,6 +906,7 @@ const App = {
     if(!match&&s.name&&s.fileNo) API.submitNewPatient(s).catch(()=>{});
     App.closeSticker();
     App.populatePatientCard(App.state.selected);
+    if(App.state.authNo){const ba=App.el('billingAuthNo');if(ba)ba.value=App.state.authNo;}
     App.el('dashboardScreen').style.display='none';
     App.el('stepsBar').style.display='flex';
     App.setTodayDate();App.resetCalendar();App.switchBillingMode('voice');

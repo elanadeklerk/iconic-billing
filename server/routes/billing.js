@@ -120,7 +120,7 @@ router.post('/scan-sticker', requireAuth, async (req, res) => {
           content: [
             { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
             { type: 'text', text: `You are reading a South African hospital patient sticker. Extract patient info and return ONLY valid JSON:
-{"fileNo":"","name":"","medAid":"","plan":"","membNo":"","depCode":"","idNo":"","cellNo":"","dob":""}
+{"fileNo":"","name":"","medAid":"","plan":"","membNo":"","depCode":"","idNo":"","cellNo":"","dob":"","authNo":""}
 
 RULES:
 - fileNo: hospital file/case number at top of sticker (e.g. "770810285")
@@ -132,6 +132,7 @@ RULES:
 - idNo: 13-digit SA ID number starting with birth year digits (e.g. "7210160071088")
 - cellNo: 10-digit phone number starting with 06/07/08 — from WK (work) or HM (home) fields
 - dob: date of birth if labeled "DOB:" or "D.O.B:"
+- authNo: authorization/authorisation number — look for labels like "AUTH:", "Auth No:", "Authorization:", "Authorisation:", "Auth #", "Pre-Auth:" (e.g. "A123456"). Use "" if not visible
 Use "" for any field not visible. Return ONLY the JSON.` }
           ]
         }]
@@ -157,7 +158,29 @@ Use "" for any field not visible. Return ONLY the JSON.` }
       cellNo:  parsed.cellNo  || '',
       dob:     parsed.dob     || '',
       ward:    parsed.ward    || '',
+      authNo:  parsed.authNo  || '',
     });
+
+    // Forward sticker scan + photo to Apps Script (non-blocking — response already sent)
+    if (doctor.apps_script_url) {
+      fetch(doctor.apps_script_url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type:        'sticker',
+          timestamp:   new Date().toISOString(),
+          fileNo:      parsed.fileNo  || '',
+          name:        parsed.name    || '',
+          medAid:      parsed.medAid  || '',
+          plan:        parsed.plan    || '',
+          membNo:      parsed.membNo  || '',
+          authNo:      parsed.authNo  || '',
+          doctorName:  doctor.doctor_name || '',
+          imageBase64: imageBase64,
+        }),
+      }).catch(err => console.error('[Sticker] Apps Script forward error:', err.message));
+    }
+
   } catch (err) {
     console.error('Sticker scan error:', err.message);
     res.status(500).json({ error: err.message });
