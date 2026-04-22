@@ -1,6 +1,6 @@
 // ─── CONFIG — change these for each doctor ────────────────
 const DOCTOR_NAME    = "Dr N Moosa";          // Used in summary headings
-const SUBMISSIONS    = "Form responses 1"; // Tab where app writes billing entries
+const SUBMISSIONS    = "Form Responses 1"; // Tab where app writes billing entries
 const BILLING_LOG    = "Billing Log";         // Auto-generated — do not rename
 const COLLECTIONS    = "Collections Summary"; // Auto-generated — do not rename
 const STICKER_SCANS  = "Sticker Scans";       // Auto-generated — do not rename
@@ -278,26 +278,30 @@ function doPost(e) {
     let sheet = ss.getSheetByName(SUBMISSIONS);
     if (!sheet) sheet = ss.insertSheet(SUBMISSIONS);
 
+    // Format the entire tariff/icd10/modifier columns as plain text once per call.
+    // This is more reliable than per-row formatting — prevents Sheets from
+    // auto-converting codes like "0190,0191" into a large number.
+    sheet.getRange('H:J').setNumberFormat('@STRING@');
+
     var rowsToAdd = Array.isArray(data.rows) ? data.rows : [data];
 
     rowsToAdd.forEach(function(row) {
       var nextRow = sheet.getLastRow() + 1;
-      // Pre-format tariff, icd10, modifier columns as TEXT before writing
-      // MUST use setValues (not appendRow) so the format applies to the same row
-      sheet.getRange(nextRow, 8, 1, 3).setNumberFormat('@STRING@');
-      sheet.getRange(nextRow, 1, 1, 11).setValues([[
+      // Write non-code columns together
+      sheet.getRange(nextRow, 1, 1, 7).setValues([[
         row.timestamp     || new Date().toISOString(),
         row.fileNo        || '',
         row.patientName   || '',
         row.dateOfService || '',
         row.fundingType   || '',
         row.medAid        || '',
-        row.membNo        || '',
-        String(row.tariff   || ''),
-        String(row.icd10    || ''),
-        String(row.modifier || ''),
-        row.notes         || ''
+        row.membNo        || ''
       ]]);
+      // Write code columns individually — most reliable way to force text storage
+      sheet.getRange(nextRow, 8).setValue(String(row.tariff   || ''));
+      sheet.getRange(nextRow, 9).setValue(String(row.icd10    || ''));
+      sheet.getRange(nextRow, 10).setValue(String(row.modifier || ''));
+      sheet.getRange(nextRow, 11).setValue(row.notes || '');
     });
 
     // Auto-refresh the billing log and collections after every submission
