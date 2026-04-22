@@ -1,0 +1,435 @@
+// ─── CONFIG — change these for each doctor ────────────────
+const DOCTOR_NAME    = "Dr N Moosa";          // Used in summary headings
+const SUBMISSIONS    = "Form responses 1"; // Tab where app writes billing entries
+const BILLING_LOG    = "Billing Log";         // Auto-generated — do not rename
+const COLLECTIONS    = "Collections Summary"; // Auto-generated — do not rename
+const STICKER_SCANS  = "Sticker Scans";       // Auto-generated — do not rename
+// ──────────────────────────────────────────────────────────
+
+const STATUSES = [
+  "Unbilled", "Billed", "Submitted", "In Process",
+  "Awaiting Auth", "PMB Review", "Call Med Aid",
+  "Sent for Re-process", "Partial Payment", "Partly Paid",
+  "Payment Plan", "Patient to Pay", "GAP",
+  "Paid", "Settled", "Rejected", "Written Off"
+];
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("Billing")
+    .addItem("Refresh Billing Log", "refreshBillingLog")
+    .addItem("Refresh Collections Summary", "refreshCollections")
+    .addItem("Refresh All", "refreshAll")
+    .toUi();
+}
+
+function refreshAll() {
+  refreshBillingLog();
+  refreshCollections();
+}
+
+// ─── Refresh Billing Log ───────────────────────────────────
+function refreshBillingLog() {
+  const ss        = SpreadsheetApp.getActiveSpreadsheet();
+  const respSheet = ss.getSheetByName(SUBMISSIONS);
+  if (!respSheet || respSheet.getLastRow() < 2) return;
+
+  let logSheet = ss.getSheetByName(BILLING_LOG);
+  if (!logSheet) logSheet = ss.insertSheet(BILLING_LOG);
+
+  const headers = [
+    "File No", "Patient Name", "Funding Type",
+    "Medical Aid / Insurer", "Plan / Option", "Membership / Policy No",
+    "Date of Service", "Tariff Code(s)", "ICD-10 Code(s)", "Modifiers",
+    "Amount Billed", "Amount Paid", "Outstanding",
+    "Payment Date", "Status", "Notes"
+  ];
+
+  const existingData = logSheet.getLastRow() > 1
+    ? logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 16).getValues()
+    : [];
+
+  const existingMap = {};
+  existingData.forEach(function(row) {
+    var key = row[0] + "_" + row[6];
+    existingMap[key] = row;
+  });
+
+  const respData = respSheet.getDataRange().getValues();
+  const newRows  = [];
+
+  for (var i = 1; i < respData.length; i++) {
+    var r      = respData[i];
+    var fileNo = r[1];
+    var dateStr= r[3];
+    var key    = fileNo + "_" + dateStr;
+
+    if (existingMap[key]) {
+      newRows.push(existingMap[key]);
+    } else {
+      newRows.push([
+        fileNo, r[2], r[4], r[5], "", r[6],
+        dateStr, r[7], r[8], r[9],
+        "", "", "", "", "Unbilled", r[10] || ""
+      ]);
+    }
+  }
+
+  logSheet.clearContents();
+  logSheet.clearFormats();
+  logSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  logSheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight("bold")
+    .setBackground("#1a73e8")
+    .setFontColor("#ffffff");
+
+  if (newRows.length === 0) return;
+
+  logSheet.getRange(2, 1, newRows.length, 16).setValues(newRows);
+
+  for (var j = 2; j <= newRows.length + 1; j++) {
+    logSheet.getRange(j, 13).setFormula("=IF(K" + j + "=\"\",\"\",K" + j + "-L" + j + ")");
+  }
+
+  var statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(STATUSES, true)
+    .setAllowInvalid(false)
+    .build();
+  logSheet.getRange(2, 15, newRows.length, 1).setDataValidation(statusRule);
+
+  var colorMap = {
+    "Paid":        { bg: "#e6f4ea", font: "#137333" },
+    "Settled":     { bg: "#e6f4ea", font: "#137333" },
+    "Rejected":    { bg: "#fce8e6", font: "#c5221f" },
+    "Written Off": { bg: "#f1f3f4", font: "#80868b" },
+    "Unbilled":    { bg: "#fff8e1", font: "#f57f17" },
+    "Billed":      { bg: "#e8f0fe", font: "#1a73e8" },
+    "GAP":         { bg: "#fce8e6", font: "#c5221f" },
+  };
+
+  var rules = [];
+  Object.entries(colorMap).forEach(function(entry) {
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=$O2="' + entry[0] + '"')
+        .setBackground(entry[1].bg)
+        .setFontColor(entry[1].font)
+        .setRanges([logSheet.getRange(2, 1, newRows.length, 16)])
+        .build()
+    );
+  });
+  logSheet.setConditionalFormatRules(rules);
+
+  [90, 180, 120, 160, 120, 150, 120, 120, 120, 100, 120, 120, 120, 120, 160, 200]
+    .forEach(function(w, i) { logSheet.setColumnWidth(i + 1, w); });
+
+  logSheet.setFrozenRows(1);
+  logSheet.getRange(2, 8, Math.max(newRows.length, 1), 3).setNumberFormat('@STRING@');
+}
+
+// ─── Refresh Collections Summary ──────────────────────────
+function refreshCollections() {
+  const ss       = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName(BILLING_LOG);
+  if (!logSheet || logSheet.getLastRow() < 2) return;
+
+  let colSheet = ss.getSheetByName(COLLECTIONS);
+  if (!colSheet) {
+    colSheet = ss.insertSheet(COLLECTIONS);
+  } else {
+    colSheet.clearContents();
+    colSheet.clearFormats();
+  }
+
+  const today   = new Date();
+  const logData = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 16).getValues();
+
+  const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d120: 0 };
+  const fundTotals   = {};
+  const statusTotals = {};
+  let totalBilled = 0, totalPaid = 0, totalOutstanding = 0;
+
+  logData.forEach(function(row) {
+    var dos         = new Date(row[6]);
+    var billed      = parseFloat(row[10]) || 0;
+    var paid        = parseFloat(row[11]) || 0;
+    var outstanding = billed - paid;
+    var status      = row[14] || "Unbilled";
+    var fundType    = row[2]  || "Unknown";
+    var ageDays     = Math.floor((today - dos) / (1000 * 60 * 60 * 24));
+
+    totalBilled      += billed;
+    totalPaid        += paid;
+    totalOutstanding += outstanding;
+
+    if (outstanding > 0) {
+      if (ageDays <= 30)       buckets.current += outstanding;
+      else if (ageDays <= 60)  buckets.d30     += outstanding;
+      else if (ageDays <= 90)  buckets.d60     += outstanding;
+      else if (ageDays <= 120) buckets.d90     += outstanding;
+      else                     buckets.d120    += outstanding;
+    }
+
+    if (!fundTotals[fundType]) fundTotals[fundType] = { billed: 0, paid: 0, outstanding: 0 };
+    fundTotals[fundType].billed      += billed;
+    fundTotals[fundType].paid        += paid;
+    fundTotals[fundType].outstanding += outstanding;
+
+    if (!statusTotals[status]) statusTotals[status] = 0;
+    statusTotals[status] += outstanding;
+  });
+
+  var ZAR = function(val) { return "R " + val.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","); };
+  var r = 1;
+
+  colSheet.getRange(r, 1, 1, 4).merge()
+    .setValue(DOCTOR_NAME + " — COLLECTIONS & AGEING SUMMARY")
+    .setFontWeight("bold").setFontSize(14)
+    .setBackground("#1a73e8").setFontColor("#ffffff")
+    .setHorizontalAlignment("center");
+  r++;
+
+  colSheet.getRange(r, 1, 1, 4).merge()
+    .setValue("Last updated: " + today.toLocaleString())
+    .setFontStyle("italic").setFontColor("#80868b")
+    .setHorizontalAlignment("center");
+  r += 2;
+
+  var section = function(title) {
+    colSheet.getRange(r, 1, 1, 4).merge()
+      .setValue(title).setFontWeight("bold")
+      .setBackground("#e8f0fe");
+    r++;
+  };
+
+  section("OVERVIEW");
+  [
+    ["Total Billed",      ZAR(totalBilled)],
+    ["Total Paid",        ZAR(totalPaid)],
+    ["Total Outstanding", ZAR(totalOutstanding)],
+    ["Total Claims",      logData.length]
+  ].forEach(function(item) {
+    colSheet.getRange(r, 1).setValue(item[0]).setFontWeight("bold");
+    colSheet.getRange(r, 2).setValue(item[1]);
+    r++;
+  });
+  r++;
+
+  section("AGEING ANALYSIS");
+  colSheet.getRange(r, 1).setValue("Bucket").setFontWeight("bold");
+  colSheet.getRange(r, 2).setValue("Outstanding").setFontWeight("bold");
+  r++;
+
+  [
+    ["Current (0-30 days)", buckets.current, "#e6f4ea"],
+    ["30-60 days",          buckets.d30,     "#fff8e1"],
+    ["60-90 days",          buckets.d60,     "#fce8e6"],
+    ["90-120 days",         buckets.d90,     "#fce8e6"],
+    ["120+ days",           buckets.d120,    "#f4c7c3"],
+  ].forEach(function(item) {
+    colSheet.getRange(r, 1).setValue(item[0]);
+    colSheet.getRange(r, 2).setValue(ZAR(item[1])).setBackground(item[2]);
+    r++;
+  });
+  r++;
+
+  section("BY FUNDING TYPE");
+  colSheet.getRange(r, 1).setValue("Funding Type").setFontWeight("bold");
+  colSheet.getRange(r, 2).setValue("Billed").setFontWeight("bold");
+  colSheet.getRange(r, 3).setValue("Paid").setFontWeight("bold");
+  colSheet.getRange(r, 4).setValue("Outstanding").setFontWeight("bold");
+  r++;
+
+  Object.entries(fundTotals).forEach(function(entry) {
+    colSheet.getRange(r, 1).setValue(entry[0]);
+    colSheet.getRange(r, 2).setValue(ZAR(entry[1].billed));
+    colSheet.getRange(r, 3).setValue(ZAR(entry[1].paid));
+    colSheet.getRange(r, 4).setValue(ZAR(entry[1].outstanding));
+    r++;
+  });
+  r++;
+
+  section("BY CLAIM STATUS");
+  colSheet.getRange(r, 1).setValue("Status").setFontWeight("bold");
+  colSheet.getRange(r, 2).setValue("Outstanding").setFontWeight("bold");
+  r++;
+
+  Object.entries(statusTotals).forEach(function(entry) {
+    colSheet.getRange(r, 1).setValue(entry[0]);
+    colSheet.getRange(r, 2).setValue(ZAR(entry[1]));
+    r++;
+  });
+
+  [220, 160, 160, 160].forEach(function(w, i) { colSheet.setColumnWidth(i + 1, w); });
+}
+
+// ─── doPost — receives billing entries OR sticker scans ────
+// Accepts EITHER a single billing entry OR { type: 'sticker', ... }
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+
+    // Route sticker scans to their own handler
+    if (data.type === 'sticker') return doStickerRow(data);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // Auto-create the submissions tab if it doesn't exist yet
+    let sheet = ss.getSheetByName(SUBMISSIONS);
+    if (!sheet) sheet = ss.insertSheet(SUBMISSIONS);
+
+    var rowsToAdd = Array.isArray(data.rows) ? data.rows : [data];
+
+    rowsToAdd.forEach(function(row) {
+      var nextRow = sheet.getLastRow() + 1;
+      // Pre-format tariff, icd10, modifier columns as TEXT before writing
+      // MUST use setValues (not appendRow) so the format applies to the same row
+      sheet.getRange(nextRow, 8, 1, 3).setNumberFormat('@STRING@');
+      sheet.getRange(nextRow, 1, 1, 11).setValues([[
+        row.timestamp     || new Date().toISOString(),
+        row.fileNo        || '',
+        row.patientName   || '',
+        row.dateOfService || '',
+        row.fundingType   || '',
+        row.medAid        || '',
+        row.membNo        || '',
+        String(row.tariff   || ''),
+        String(row.icd10    || ''),
+        String(row.modifier || ''),
+        row.notes         || ''
+      ]]);
+    });
+
+    // Auto-refresh the billing log and collections after every submission
+    refreshBillingLog();
+    refreshCollections();
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true, rows: rowsToAdd.length }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─── doStickerRow — writes one sticker scan to Sticker Scans tab ───
+function doStickerRow(data) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(STICKER_SCANS);
+
+    // Create the tab with headers if it doesn't exist yet
+    if (!sheet) {
+      sheet = ss.insertSheet(STICKER_SCANS);
+      const headers = [
+        'Timestamp', 'File No', 'Patient Name',
+        'Medical Aid', 'Plan', 'Membership No',
+        'Auth No', 'Doctor', 'Photo'
+      ];
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+        .setFontWeight('bold')
+        .setBackground('#1a73e8')
+        .setFontColor('#ffffff');
+      sheet.setFrozenRows(1);
+      [160, 100, 180, 160, 140, 140, 100, 140, 200]
+        .forEach(function(w, i) { sheet.setColumnWidth(i + 1, w); });
+    }
+
+    var nextRow = sheet.getLastRow() + 1;
+
+    // Write all text fields first
+    sheet.getRange(nextRow, 1, 1, 8).setValues([[
+      data.timestamp  || new Date().toISOString(),
+      data.fileNo     || '',
+      data.name       || '',
+      data.medAid     || '',
+      data.plan       || '',
+      data.membNo     || '',
+      data.authNo     || '',
+      data.doctorName || ''
+    ]]);
+
+    // Embed the sticker photo directly in column 9
+    if (data.imageBase64) {
+      try {
+        const blob = Utilities.newBlob(
+          Utilities.base64Decode(data.imageBase64),
+          'image/jpeg',
+          'sticker.jpg'
+        );
+        sheet.setRowHeight(nextRow, 130);
+        sheet.insertImage(blob, 9, nextRow);
+      } catch(imgErr) {
+        sheet.getRange(nextRow, 9).setValue('[photo unavailable]');
+      }
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─── doGet — returns recent billings for the app dashboard ─
+function doGet(e) {
+  if (e.parameter.mode !== 'fetch') {
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'ok' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    var limit  = parseInt(e.parameter.limit) || 8;
+    var ss     = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet  = ss.getSheetByName(BILLING_LOG);
+
+    if (!sheet || sheet.getLastRow() < 2) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ billings: [] }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var rows = sheet.getDataRange().getValues();
+
+    // Return recent billings (newest first), exclude ward visit rows
+    var data = rows.slice(1)
+      .filter(function(row) {
+        return (row[15] || '').toString() !== 'Ward visit';
+      })
+      .reverse()
+      .slice(0, limit)
+      .map(function(row) {
+        return {
+          fileNo:        row[0]  || '',
+          patientName:   row[1]  || '',
+          fundingType:   row[2]  || '',
+          medAid:        row[3]  || '',
+          dateOfService: row[6]  || '',
+          tariff:        row[7]  || '',
+          icd10:         row[8]  || '',
+          amountBilled:  row[10] || '',
+          amountPaid:    row[11] || '',
+          outstanding:   row[12] || '',
+          status:        row[14] || '',
+          timestamp:     row[6]  || '',
+        };
+      });
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ billings: data }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ billings: [], error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
